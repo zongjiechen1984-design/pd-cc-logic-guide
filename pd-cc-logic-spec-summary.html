@@ -1,0 +1,1321 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>USB PD CC Logic 封包解析速查</title>
+  <style>
+    :root {
+      --ink: #16211f;
+      --muted: #5d6b66;
+      --paper: #f7f2e8;
+      --card: #fffaf0;
+      --line: #d8c8ad;
+      --deep: #12352f;
+      --mint: #b9e3d0;
+      --amber: #f3bd5b;
+      --clay: #c86244;
+      --blue: #315f7d;
+      --shadow: 0 24px 60px rgba(39, 42, 35, 0.14);
+      --mono: "Cascadia Mono", "Consolas", monospace;
+      --serif: "Noto Serif TC", "Source Han Serif TC", "Georgia", serif;
+      --sans: "Noto Sans TC", "Microsoft JhengHei", "Trebuchet MS", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 12% 8%, rgba(243, 189, 91, 0.34), transparent 28rem),
+        radial-gradient(circle at 90% 18%, rgba(185, 227, 208, 0.45), transparent 28rem),
+        linear-gradient(135deg, #f9f0dc 0%, #eef4ea 52%, #e6f0ed 100%);
+      font-family: var(--sans);
+      line-height: 1.65;
+    }
+
+    a {
+      color: inherit;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 17rem minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 2rem 1.2rem;
+      background: rgba(18, 53, 47, 0.94);
+      color: #f8f1df;
+      border-right: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .brand {
+      display: grid;
+      gap: 0.4rem;
+      margin-bottom: 2rem;
+    }
+
+    .brand strong {
+      font-family: var(--serif);
+      font-size: 1.35rem;
+      line-height: 1.2;
+      letter-spacing: 0.04em;
+    }
+
+    .brand span {
+      color: rgba(248, 241, 223, 0.72);
+      font-size: 0.88rem;
+    }
+
+    nav {
+      display: grid;
+      gap: 0.35rem;
+    }
+
+    nav a {
+      padding: 0.58rem 0.75rem;
+      border-radius: 999px;
+      color: rgba(248, 241, 223, 0.86);
+      text-decoration: none;
+      font-size: 0.93rem;
+      transition: background 180ms ease, transform 180ms ease;
+    }
+
+    nav a:hover {
+      background: rgba(255, 255, 255, 0.12);
+      transform: translateX(4px);
+    }
+
+    main {
+      padding: 2rem clamp(1rem, 4vw, 4rem) 5rem;
+    }
+
+    .hero {
+      display: grid;
+      gap: 1.5rem;
+      min-height: 28rem;
+      align-content: center;
+      padding: clamp(2rem, 6vw, 5rem);
+      border-radius: 2rem;
+      background:
+        linear-gradient(120deg, rgba(18, 53, 47, 0.94), rgba(34, 79, 68, 0.9)),
+        repeating-linear-gradient(90deg, transparent 0 28px, rgba(255,255,255,0.08) 28px 29px);
+      color: #fff8e8;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -7rem;
+      bottom: -8rem;
+      width: 24rem;
+      height: 24rem;
+      border-radius: 50%;
+      background: conic-gradient(from 160deg, var(--amber), var(--mint), transparent 66%);
+      opacity: 0.42;
+      filter: blur(2px);
+    }
+
+    .eyebrow {
+      width: fit-content;
+      padding: 0.35rem 0.75rem;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 999px;
+      color: rgba(255, 248, 232, 0.82);
+      font-size: 0.85rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3 {
+      font-family: var(--serif);
+      line-height: 1.18;
+      margin: 0;
+    }
+
+    h1 {
+      max-width: 56rem;
+      font-size: clamp(2.4rem, 6vw, 5.8rem);
+      letter-spacing: -0.07em;
+    }
+
+    h2 {
+      font-size: clamp(1.8rem, 4vw, 3.1rem);
+      letter-spacing: -0.04em;
+    }
+
+    h3 {
+      font-size: 1.35rem;
+    }
+
+    .hero p {
+      max-width: 47rem;
+      margin: 0;
+      color: rgba(255, 248, 232, 0.82);
+      font-size: 1.08rem;
+    }
+
+    .hero-grid,
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem;
+    }
+
+    .hero-card,
+    .card,
+    .decoder {
+      border: 1px solid var(--line);
+      border-radius: 1.25rem;
+      background: rgba(255, 250, 240, 0.82);
+      box-shadow: 0 12px 28px rgba(39, 42, 35, 0.09);
+    }
+
+    .hero-card {
+      padding: 1rem;
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    .hero-card b {
+      display: block;
+      color: #ffffff;
+      font-size: 1.35rem;
+    }
+
+    .hero-card span {
+      color: rgba(255, 248, 232, 0.76);
+      font-size: 0.92rem;
+    }
+
+    section {
+      margin-top: 3.2rem;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .section-head p {
+      max-width: 38rem;
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .card {
+      padding: 1.2rem;
+    }
+
+    .card p {
+      margin: 0.5rem 0 0;
+      color: var(--muted);
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.25rem 0.6rem;
+      border-radius: 999px;
+      background: rgba(185, 227, 208, 0.55);
+      color: #173d35;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    .packet {
+      display: grid;
+      grid-template-columns: 0.85fr 1.25fr 1.35fr 0.8fr 0.7fr;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .packet-four {
+      grid-template-columns: 0.85fr 1.2fr 1.2fr 1fr;
+    }
+
+    .packet-six {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .packet div {
+      min-height: 5rem;
+      padding: 1rem;
+      border-radius: 1rem;
+      background: var(--card);
+      border: 1px solid var(--line);
+      position: relative;
+    }
+
+    .packet b {
+      display: block;
+      font-family: var(--mono);
+      color: var(--deep);
+    }
+
+    .packet span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 0.35rem;
+    }
+
+    .flow {
+      counter-reset: step;
+      display: grid;
+      gap: 0.8rem;
+    }
+
+    .flow li {
+      list-style: none;
+      position: relative;
+      padding: 1rem 1rem 1rem 4rem;
+      border-radius: 1rem;
+      background: var(--card);
+      border: 1px solid var(--line);
+    }
+
+    .flow li::before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      left: 1rem;
+      top: 1rem;
+      display: grid;
+      place-items: center;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      background: var(--deep);
+      color: #fff8e8;
+      font-weight: 800;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 1rem;
+      background: rgba(255, 250, 240, 0.78);
+      box-shadow: 0 10px 22px rgba(39, 42, 35, 0.07);
+    }
+
+    th,
+    td {
+      padding: 0.85rem 0.9rem;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--deep);
+      color: #fff8e8;
+      font-size: 0.9rem;
+      letter-spacing: 0.04em;
+    }
+
+    td code,
+    pre,
+    .mono {
+      font-family: var(--mono);
+    }
+
+    code {
+      padding: 0.08rem 0.28rem;
+      border-radius: 0.35rem;
+      background: rgba(49, 95, 125, 0.12);
+      color: #20465f;
+    }
+
+    .decoder {
+      display: grid;
+      gap: 1rem;
+      padding: 1.25rem;
+      background:
+        linear-gradient(135deg, rgba(255, 250, 240, 0.92), rgba(238, 244, 234, 0.92)),
+        repeating-linear-gradient(45deg, transparent 0 10px, rgba(18, 53, 47, 0.035) 10px 11px);
+    }
+
+    .decoder-wide {
+      grid-column: 1 / -1;
+    }
+
+    .decoder-controls {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 13rem;
+      gap: 0.8rem;
+    }
+
+    label {
+      display: grid;
+      gap: 0.35rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    input,
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 0.8rem;
+      padding: 0.75rem 0.85rem;
+      background: #fffdf7;
+      color: var(--ink);
+      font: 700 1rem var(--mono);
+      outline: none;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 4px rgba(49, 95, 125, 0.14);
+    }
+
+    .result {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.7rem;
+    }
+
+    .result div {
+      padding: 0.85rem;
+      border-radius: 0.9rem;
+      background: rgba(18, 53, 47, 0.08);
+      border: 1px solid rgba(18, 53, 47, 0.1);
+    }
+
+    .result b {
+      display: block;
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    .result span {
+      display: block;
+      margin-top: 0.2rem;
+      font-family: var(--mono);
+      font-weight: 800;
+      color: var(--deep);
+      overflow-wrap: anywhere;
+    }
+
+    .analysis-stack {
+      display: grid;
+      gap: 0.9rem;
+    }
+
+    .analysis-card {
+      padding: 1rem;
+      border: 1px solid var(--line);
+      border-radius: 1rem;
+      background: rgba(255, 253, 247, 0.86);
+    }
+
+    .analysis-card h4 {
+      margin: 0 0 0.6rem;
+      font-size: 1rem;
+      color: var(--deep);
+    }
+
+    .analysis-card table {
+      box-shadow: none;
+      border-radius: 0.75rem;
+      font-size: 0.92rem;
+    }
+
+    .hint-list {
+      display: grid;
+      gap: 0.45rem;
+      margin: 0;
+      padding: 0;
+    }
+
+    .hint-list li {
+      list-style: none;
+      padding: 0.5rem 0.65rem;
+      border-radius: 0.75rem;
+      background: rgba(49, 95, 125, 0.09);
+      color: var(--muted);
+    }
+
+    .bit-grid {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      gap: 0.45rem;
+    }
+
+    .bit-grid div {
+      min-height: 4.2rem;
+      padding: 0.55rem;
+      border-radius: 0.7rem;
+      background: #fffdf7;
+      border: 1px solid var(--line);
+      font-size: 0.8rem;
+    }
+
+    .bit-grid b {
+      display: block;
+      font-family: var(--mono);
+      color: var(--clay);
+      font-size: 0.78rem;
+    }
+
+    .callout {
+      padding: 1.1rem 1.2rem;
+      border-left: 0.45rem solid var(--clay);
+      border-radius: 1rem;
+      background: rgba(255, 250, 240, 0.86);
+    }
+
+    .callout p {
+      margin: 0;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .footer {
+      margin-top: 3rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 980px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      aside {
+        position: static;
+        height: auto;
+      }
+
+      nav {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .hero-grid,
+      .grid,
+      .two-col,
+      .result {
+        grid-template-columns: 1fr;
+      }
+
+      .packet {
+        grid-template-columns: 1fr;
+      }
+
+      .packet-four,
+      .packet-six {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 680px) {
+      main {
+        padding: 1rem;
+      }
+
+      .hero {
+        border-radius: 1.2rem;
+        padding: 1.4rem;
+      }
+
+      .decoder-controls {
+        grid-template-columns: 1fr;
+      }
+
+      .bit-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      table {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <div class="brand">
+        <strong>USB PD CC Logic<br>封包解析速查</strong>
+        <span>Header -> Message Type -> Data Object -> 人類可讀結果</span>
+      </div>
+      <nav aria-label="Page sections">
+        <a href="#packet">封包一定有什麼</a>
+        <a href="#sop">SOP / SOP' / SOP''</a>
+        <a href="#header">16-bit Header</a>
+        <a href="#objects">32-bit Data Object</a>
+        <a href="#fixed-pdo">Fixed PDO</a>
+        <a href="#battery-pdo">Battery PDO</a>
+        <a href="#variable-pdo">Variable PDO</a>
+        <a href="#pps-apdo">PPS APDO</a>
+        <a href="#rdo">Request RDO</a>
+        <a href="#vdm">VDM / VDO</a>
+        <a href="#decoder">快速解析器</a>
+        <a href="#flow">解析流程</a>
+      </nav>
+    </aside>
+
+    <main>
+      <header class="hero">
+        <span class="eyebrow">PD Packet Field Guide</span>
+        <h1>把 USB PD 封包拆成看得懂的邏輯地圖</h1>
+        <p>
+          這份頁面把 PD analyzer 裡的 SOP、Msg、Obj、Rev、Data 欄位串起來，
+          用固定流程判斷 Header、PDO、RDO、VDM 與常見 Data Object。
+        </p>
+        <div class="hero-grid">
+          <div class="hero-card"><b>1</b><span>先看 SOP，知道這包講給誰</span></div>
+          <div class="hero-card"><b>2</b><span>再看 16-bit Header，知道有幾個 Data Object</span></div>
+          <div class="hero-card"><b>3</b><span>每 4 bytes 拆一個 32-bit object</span></div>
+        </div>
+      </header>
+
+      <section id="packet">
+        <div class="section-head">
+          <h2>PD 封包骨架</h2>
+          <p>一般 PD message 的固定骨架如下。CRC 與 EOP 在實際線上存在，但 analyzer 通常會隱藏。</p>
+        </div>
+        <div class="packet" aria-label="PD packet structure">
+          <div><b>SOP</b><span>Start of Packet，決定對象</span></div>
+          <div><b>16-bit Header</b><span>Msg Type、Obj 數量、ID、Role、Rev</span></div>
+          <div><b>0~7 x 32-bit Data Object</b><span>PDO、RDO、VDM、Alert、BIST...</span></div>
+          <div><b>32-bit CRC</b><span>檢查封包正確性</span></div>
+          <div><b>EOP</b><span>End of Packet</span></div>
+        </div>
+      </section>
+
+      <section id="sop">
+        <div class="section-head">
+          <h2>SOP 是收件人</h2>
+          <p>同一包只會有一種 SOP 類型，不會同時有 SOP 和 SOP'。</p>
+        </div>
+        <table>
+          <thead>
+            <tr><th>SOP 類型</th><th>對象</th><th>白話理解</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>SOP</code></td><td>Port Partner</td><td>一般 Source / Sink 之間的 PD 溝通，例如 Source_Cap、Request、Accept、PS_RDY。</td></tr>
+            <tr><td><code>SOP'</code></td><td>近端 Cable Plug / E-Marker</td><td>問線材這一端的能力，例如 Discover Identity 判斷是否 5A E-Marked cable。</td></tr>
+            <tr><td><code>SOP''</code></td><td>遠端 Cable Plug / E-Marker</td><td>問線材另一端 plug，較常見於 active cable、USB4/TBT、debug 或 compliance 測試。</td></tr>
+            <tr><td><code>Hard Reset</code></td><td>Port Partner</td><td>重置 PD 合約與狀態機。</td></tr>
+            <tr><td><code>Cable Reset</code></td><td>Cable Plug</td><td>重置 cable communication。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="header">
+        <div class="section-head">
+          <h2>16-bit Message Header</h2>
+          <p>Header 是第一個必拆欄位，決定這包是 Control Message 還是 Data Message。</p>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Bit</th><th>欄位</th><th>含意</th><th>判斷重點</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>15</code></td><td>Extended</td><td>0 = normal message；1 = extended message。</td><td>Extended = 1 時，後面還有 Extended Message Header。</td></tr>
+            <tr><td><code>14:12</code></td><td>Number of Data Objects</td><td>0~7 個 32-bit Data Object。</td><td><code>000</code> 看 Control Message；大於 0 看 Data Message。</td></tr>
+            <tr><td><code>11:9</code></td><td>Message ID</td><td>0~7 循環序號。</td><td>GoodCRC 對應上一包的 ID。</td></tr>
+            <tr><td><code>8</code></td><td>Power Role</td><td>0 = Sink；1 = Source。</td><td>Analyzer 常用它配合方向顯示 SRC/SNK。</td></tr>
+            <tr><td><code>7:6</code></td><td>Spec Revision</td><td>00 = PD1.0；01 = PD2.0；10 = PD3.0。</td><td>看到 V3 通常是 raw <code>10</code>。</td></tr>
+            <tr><td><code>5</code></td><td>Data Role</td><td>0 = UFP；1 = DFP。</td><td>DR_SWAP 就是在切換這個角色。</td></tr>
+            <tr><td><code>4:0</code></td><td>Message Type</td><td>5-bit message code。</td><td>同一 code 在 Control / Data 欄可能代表不同東西。</td></tr>
+          </tbody>
+        </table>
+        <div class="callout" style="margin-top:1rem">
+          <p><b>重點：</b>不要只看 Message Type raw code。一定要先看 <code>NDO</code>。<code>NDO = 0</code> 看 Control Message；<code>NDO &gt; 0</code> 看 Data Message。</p>
+        </div>
+      </section>
+
+      <section id="objects">
+        <div class="section-head">
+          <h2>32-bit Data Object 分類</h2>
+          <p>Data Object 是 4 bytes 容器，真正含意要靠 Header 的 Message Type 決定。</p>
+        </div>
+        <div class="grid">
+          <div class="card">
+            <span class="tag">PDO</span>
+            <h3>Source / Sink Capabilities</h3>
+            <p>宣告可供應或可接受的能力。包含 Fixed、Battery、Variable、PPS APDO。</p>
+          </div>
+          <div class="card">
+            <span class="tag">RDO</span>
+            <h3>Request</h3>
+            <p>Sink 用來向 Source 要某一個 PDO，例如 5V/3A 或 PPS 指定電壓電流。</p>
+          </div>
+          <div class="card">
+            <span class="tag">VDM / VDO</span>
+            <h3>Vendor Defined</h3>
+            <p>Discover Identity、Discover SVIDs、Discover Modes、Enter Mode 等都在這類。</p>
+          </div>
+        </div>
+        <table style="margin-top:1rem">
+          <thead>
+            <tr><th>Message Type</th><th>Data Object 類型</th><th>Excel 對應 Sheet</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Source_Capabilities</td><td>PDO list</td><td>Fixed / Battery / Variable / PPS APDO</td></tr>
+            <tr><td>Sink_Capabilities</td><td>Sink PDO list</td><td>Sink Fixed PDO 或其他 PDO sheet</td></tr>
+            <tr><td>Request</td><td>RDO</td><td>Request RDO / PPS Request RDO</td></tr>
+            <tr><td>Vendor_Defined</td><td>VDM Header + VDO</td><td>32-bit VDM / Generic Object</td></tr>
+            <tr><td>Alert / BIST / Battery_Status</td><td>專用 32-bit object</td><td>Alert / BIST / Battery Status sheet</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="fixed-pdo">
+        <div class="section-head">
+          <h2>32-bit Fixed PDO</h2>
+          <p>Fixed PDO 是最常見的 Source capability：宣告一組固定電壓與最大電流。</p>
+        </div>
+        <div class="bit-grid">
+          <div><b>31:30</b>Supply Type<br><code>00</code> = Fixed PDO</div>
+          <div><b>29</b>Dual-Role Power<br>是否支援 PR_SWAP</div>
+          <div><b>28</b>USB Suspend<br>是否支援 USB suspend</div>
+          <div><b>27</b>Unconstrained Power<br>是否不受限電源</div>
+          <div><b>26</b>USB Comm<br>是否具 USB data 能力</div>
+          <div><b>25</b>Dual-Role Data<br>是否支援 DR_SWAP</div>
+          <div><b>24:23</b>Peak Current<br>100 / 130 / 150 / 200%</div>
+          <div><b>22:20</b>Reserved<br>通常為 <code>000</code></div>
+          <div><b>19:10</b>Voltage<br>Raw x 50mV</div>
+          <div><b>9:0</b>Max Current<br>Raw x 10mA</div>
+        </div>
+        <table style="margin-top:1rem">
+          <thead>
+            <tr><th>欄位</th><th>Raw</th><th>說明</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Supply Type</td><td><code>00</code></td><td>固定電壓 PDO。若不是 00，代表這個 object 應放到 Battery、Variable 或 APDO sheet。</td></tr>
+            <tr><td>Peak Current</td><td><code>00</code>/<code>01</code>/<code>10</code>/<code>11</code></td><td>短時間尖峰能力：100%、130%、150%、200%。不是長時間可用電流。</td></tr>
+            <tr><td>Voltage</td><td>10-bit</td><td>Raw x 0.05V。例如 raw 100 = 5V；180 = 9V；300 = 15V；400 = 20V。</td></tr>
+            <tr><td>Maximum Current</td><td>10-bit</td><td>Raw x 0.01A。例如 raw 300 = 3A；500 = 5A。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="battery-pdo">
+        <div class="section-head">
+          <h2>32-bit Battery PDO</h2>
+          <p>Battery PDO 用「功率 W」描述能力，不直接用電流 A。它可出現在 Source_Capabilities 或 Sink_Capabilities。</p>
+        </div>
+        <div class="packet packet-four">
+          <div><b>31:30</b><span>Supply Type = <code>01</code></span></div>
+          <div><b>29:20</b><span>Maximum Voltage，Raw x 50mV</span></div>
+          <div><b>19:10</b><span>Minimum Voltage，Raw x 50mV</span></div>
+          <div><b>9:0</b><span>Maximum Power，Raw x 250mW</span></div>
+        </div>
+        <table style="margin-top:1rem">
+          <thead>
+            <tr><th>Bit</th><th>欄位</th><th>Raw / 單位</th><th>詳細說明</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>31:30</code></td><td>Supply Type</td><td><code>01</code></td><td>代表 Battery Supply PDO。若不是 <code>01</code>，表示這個 32-bit object 不是 Battery PDO，可能應放到 Fixed、Variable 或 APDO。</td></tr>
+            <tr><td><code>29:20</code></td><td>Maximum Voltage</td><td>10-bit，50mV/step</td><td>可提供或可接受的最高電壓。計算式：<code>Maximum Voltage = Raw x 0.05V</code>。例如 raw 240 = 12.00V。</td></tr>
+            <tr><td><code>19:10</code></td><td>Minimum Voltage</td><td>10-bit，50mV/step</td><td>可提供或可接受的最低電壓。計算式：<code>Minimum Voltage = Raw x 0.05V</code>。例如 raw 100 = 5.00V。</td></tr>
+            <tr><td><code>9:0</code></td><td>Maximum Power</td><td>10-bit，250mW/step</td><td>此 PDO 的最大功率。計算式：<code>Maximum Power = Raw x 0.25W</code>。Battery PDO 的核心是 W，不是 A。</td></tr>
+          </tbody>
+        </table>
+        <div class="callout" style="margin-top:1rem">
+          <p><b>好記：</b>Battery PDO = 電壓範圍 + 最大功率。例如 <code>5V~12V / 15W</code>。若要估電流，用 <code>I = P / V</code>。</p>
+        </div>
+      </section>
+
+      <section id="variable-pdo">
+        <div class="section-head">
+          <h2>32-bit Variable PDO</h2>
+          <p>Variable PDO 也描述電壓範圍，但它的能力單位是「最大電流 A」，不是功率 W。</p>
+        </div>
+        <div class="packet packet-four">
+          <div><b>31:30</b><span>Supply Type = <code>10</code></span></div>
+          <div><b>29:20</b><span>Maximum Voltage，Raw x 50mV</span></div>
+          <div><b>19:10</b><span>Minimum Voltage，Raw x 50mV</span></div>
+          <div><b>9:0</b><span>Maximum Current，Raw x 10mA</span></div>
+        </div>
+        <table style="margin-top:1rem">
+          <thead>
+            <tr><th>Bit</th><th>欄位</th><th>Raw / 單位</th><th>詳細說明</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>31:30</code></td><td>Supply Type</td><td><code>10</code></td><td>代表 Variable Supply PDO。若不是 <code>10</code>，表示這個 object 類型不對。</td></tr>
+            <tr><td><code>29:20</code></td><td>Maximum Voltage</td><td>10-bit，50mV/step</td><td>可變範圍的最高電壓。計算式：<code>Raw x 0.05V</code>。</td></tr>
+            <tr><td><code>19:10</code></td><td>Minimum Voltage</td><td>10-bit，50mV/step</td><td>可變範圍的最低電壓。計算式：<code>Raw x 0.05V</code>。</td></tr>
+            <tr><td><code>9:0</code></td><td>Maximum Current</td><td>10-bit，10mA/step</td><td>此電壓範圍內可提供或可接受的最大電流。計算式：<code>Raw x 0.01A</code>。</td></tr>
+          </tbody>
+        </table>
+        <div class="callout" style="margin-top:1rem">
+          <p><b>Battery vs Variable：</b>Battery PDO 看 <code>W</code>；Variable PDO 看 <code>A</code>。兩者都有最小/最大電壓，但最後一段欄位單位不同。</p>
+        </div>
+      </section>
+
+      <section id="pps-apdo">
+        <div class="section-head">
+          <h2>32-bit PPS APDO</h2>
+          <p>PPS APDO 是可編程電源能力，Source 可以讓 Sink 在指定範圍內要求更細的電壓與電流。</p>
+        </div>
+        <div class="packet packet-six">
+          <div><b>31:30</b><span><code>11</code> = APDO</span></div>
+          <div><b>29:28</b><span>APDO Type</span></div>
+          <div><b>27</b><span>PPS Power Limited</span></div>
+          <div><b>24:17</b><span>Max V，100mV</span></div>
+          <div><b>15:8</b><span>Min V，100mV</span></div>
+          <div><b>6:0</b><span>Max I，50mA</span></div>
+        </div>
+        <table style="margin-top:1rem">
+          <thead>
+            <tr><th>Bit</th><th>欄位</th><th>Raw / 單位</th><th>詳細說明</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>31:30</code></td><td>Supply Type</td><td><code>11</code></td><td>代表 Augmented PDO / APDO。PPS、AVS 等進階供電能力都屬於 APDO 類。</td></tr>
+            <tr><td><code>29:28</code></td><td>APDO Type</td><td><code>00</code> 常見為 PPS</td><td>決定 APDO 子類型。一般 SPR PPS 常見 raw 為 <code>00</code>；其他值可能是 reserved 或 PD 版本延伸。</td></tr>
+            <tr><td><code>27</code></td><td>PPS Power Limited</td><td>0 / 1</td><td><code>0</code> = 未宣告 power limited；<code>1</code> = power limited，Source 能力可能受限制。</td></tr>
+            <tr><td><code>26:25</code></td><td>Reserved</td><td>通常為 <code>00</code></td><td>保留欄位。若非 0，先確認 APDO 類型、PD revision、或 endian 是否正確。</td></tr>
+            <tr><td><code>24:17</code></td><td>Maximum Voltage</td><td>8-bit，100mV/step</td><td>PPS 可調範圍最高電壓。計算式：<code>Raw x 0.1V</code>。</td></tr>
+            <tr><td><code>16</code></td><td>Reserved</td><td>通常為 0</td><td>保留欄位，通常不應為 1。</td></tr>
+            <tr><td><code>15:8</code></td><td>Minimum Voltage</td><td>8-bit，100mV/step</td><td>PPS 可調範圍最低電壓。計算式：<code>Raw x 0.1V</code>。常見起點如 3.3V。</td></tr>
+            <tr><td><code>7</code></td><td>Reserved</td><td>通常為 0</td><td>保留欄位，通常不應為 1。</td></tr>
+            <tr><td><code>6:0</code></td><td>Maximum Current</td><td>7-bit，50mA/step</td><td>PPS 模式下可提供最大電流。計算式：<code>Raw x 0.05A</code>。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="rdo">
+        <div class="section-head">
+          <h2>32-bit Request RDO</h2>
+          <p>RDO 是 Sink 對 Source 說：「我要你 Source_Capabilities 裡第幾個 PDO，以及我要多少電流/功率」。</p>
+        </div>
+        <div class="two-col">
+          <div class="card">
+            <span class="tag">Fixed / Variable RDO</span>
+            <h3>要求固定或可變 PDO</h3>
+            <p>低 20 bits 通常是 Operating Current 與 Maximum Current，單位 10mA。</p>
+          </div>
+          <div class="card">
+            <span class="tag">PPS RDO</span>
+            <h3>要求 PPS APDO</h3>
+            <p>會帶 Output Voltage 與 Operating Current，PPS voltage 單位常用 20mV。</p>
+          </div>
+        </div>
+        <table style="margin-top:1rem">
+          <thead>
+            <tr><th>Bit</th><th>Fixed / Variable Request RDO</th><th>Raw / 單位</th><th>詳細說明</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>31:28</code></td><td>Object Position</td><td>1~7</td><td>指定要 Source_Capabilities 裡第幾個 PDO。<code>0000</code> 無效；<code>0001</code> 表示第 1 個 PDO。</td></tr>
+            <tr><td><code>27</code></td><td>GiveBack</td><td>0 / 1</td><td><code>0</code> = 不使用 GiveBack；<code>1</code> = 允許 Source 在需要時降低供電能力。PD 3.0 後較少見。</td></tr>
+            <tr><td><code>26</code></td><td>Capability Mismatch</td><td>0 / 1</td><td><code>0</code> = 需求在 Source 能力內；<code>1</code> = Sink 理想需求超過 Source 能力，只能降規要求。</td></tr>
+            <tr><td><code>25</code></td><td>USB Communications Capable</td><td>0 / 1</td><td>Sink 是否具 USB data communication 能力。</td></tr>
+            <tr><td><code>24</code></td><td>No USB Suspend</td><td>0 / 1</td><td><code>0</code> = 可接受 USB Suspend；<code>1</code> = 要求不要進入 USB Suspend。</td></tr>
+            <tr><td><code>23</code></td><td>Unchunked Extended Messages</td><td>0 / 1</td><td>PD 3.0 extended message 相關能力，表示是否支援 unchunked extended message。</td></tr>
+            <tr><td><code>22:20</code></td><td>Reserved</td><td>通常 <code>000</code></td><td>保留欄位，非 0 時優先檢查是否選錯 RDO 類型或 endian。</td></tr>
+            <tr><td><code>19:10</code></td><td>Operating Current</td><td>10mA/step</td><td>Sink 正常操作希望 Source 提供的電流。計算式：<code>Raw x 0.01A</code>。</td></tr>
+            <tr><td><code>9:0</code></td><td>Maximum Current</td><td>10mA/step</td><td>Sink 最大可能需要電流。計算式：<code>Raw x 0.01A</code>。</td></tr>
+          </tbody>
+        </table>
+        <table style="margin-top:1rem">
+          <thead>
+            <tr><th>Bit</th><th>PPS Request RDO</th><th>Raw / 單位</th><th>詳細說明</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>31:28</code></td><td>Object Position</td><td>1~7</td><td>指定要哪一個 PPS APDO。通常指向 Source_Capabilities 中 bit <code>31:30 = 11</code> 的 APDO。</td></tr>
+            <tr><td><code>27:26</code></td><td>Reserved</td><td>通常 <code>00</code></td><td>保留欄位。若非 0，確認是不是 PPS RDO 或 endian 錯。</td></tr>
+            <tr><td><code>25</code></td><td>Capability Mismatch</td><td>0 / 1</td><td>同一般 RDO，表示 Sink 是否只能降規接受。</td></tr>
+            <tr><td><code>24</code></td><td>USB Communications Capable</td><td>0 / 1</td><td>Sink 是否支援 USB communication。</td></tr>
+            <tr><td><code>23</code></td><td>No USB Suspend</td><td>0 / 1</td><td>Sink 是否要求不要進入 USB Suspend。</td></tr>
+            <tr><td><code>22:9</code></td><td>Output Voltage</td><td>20mV/step</td><td>PPS 目標輸出電壓。計算式：<code>Raw x 0.02V</code>。例如 5V = raw 250。</td></tr>
+            <tr><td><code>8:7</code></td><td>Reserved</td><td>通常 <code>00</code></td><td>保留欄位。</td></tr>
+            <tr><td><code>6:0</code></td><td>Operating Current</td><td>50mA/step</td><td>PPS 目標操作電流。計算式：<code>Raw x 0.05A</code>。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="vdm">
+        <div class="section-head">
+          <h2>32-bit VDM / VDO</h2>
+          <p>Vendor Defined Message 的第一個 32-bit object 通常是 VDM Header，後面才是各種 VDO 或 vendor payload。</p>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Bit</th><th>VDM Header 欄位</th><th>Raw / 值</th><th>詳細說明</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>31:16</code></td><td>SVID</td><td>16-bit</td><td>Standard or Vendor ID。<code>0xFF00</code> 常見為 USB-IF SVID；其他值可能是 DisplayPort、Thunderbolt、廠商自訂等。</td></tr>
+            <tr><td><code>15</code></td><td>VDM Type</td><td>0 / 1</td><td><code>0</code> = Unstructured VDM，後面 vendor 自訂；<code>1</code> = Structured VDM，欄位依 PD 規格解析。</td></tr>
+            <tr><td><code>14:13</code></td><td>Structured VDM Version</td><td><code>00</code>/<code>01</code>/...</td><td>Structured VDM 版本。常見 <code>00</code> = v1.0，<code>01</code> = v2.0；其他依 PD revision 確認。</td></tr>
+            <tr><td><code>12:11</code></td><td>Reserved</td><td>通常 <code>00</code></td><td>保留欄位。若非 0，先確認 Structured VDM 版本與 endian。</td></tr>
+            <tr><td><code>10:8</code></td><td>Object Position</td><td>0~7</td><td>用於 Enter Mode、Exit Mode、Attention 等命令，指定 mode/object position。Discover 類命令常為 0。</td></tr>
+            <tr><td><code>7:6</code></td><td>Command Type</td><td><code>00</code>/<code>01</code>/<code>10</code>/<code>11</code></td><td><code>00</code> = Initiator；<code>01</code> = ACK；<code>10</code> = NAK；<code>11</code> = BUSY。</td></tr>
+            <tr><td><code>5</code></td><td>Reserved</td><td>通常 0</td><td>保留欄位，通常不應為 1。</td></tr>
+            <tr><td><code>4:0</code></td><td>Command</td><td>5-bit</td><td><code>00001</code> Discover Identity；<code>00010</code> Discover SVIDs；<code>00011</code> Discover Modes；<code>00100</code> Enter Mode；<code>00101</code> Exit Mode；<code>00110</code> Attention。</td></tr>
+          </tbody>
+        </table>
+        <table style="margin-top:1rem">
+          <thead>
+            <tr><th>VDO 類型</th><th>常見在哪裡</th><th>用途</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>ID Header VDO</td><td>Discover Identity ACK</td><td>描述對方是 USB host/device、cable plug、AMA、VPD 等身分與 capability。</td></tr>
+            <tr><td>Cert Stat VDO</td><td>Discover Identity ACK</td><td>認證或憑證相關資訊。</td></tr>
+            <tr><td>Product VDO</td><td>Discover Identity ACK</td><td>Vendor ID、Product ID、bcdDevice 等產品資訊。</td></tr>
+            <tr><td>Cable VDO</td><td>問 SOP' / SOP'' cable identity</td><td>描述 cable 電流能力、速度、passive/active、latency、termination 等線材能力。</td></tr>
+            <tr><td>SVID VDO</td><td>Discover SVIDs ACK</td><td>一個 VDO 通常可放兩個 SVID，用來列出支援的功能家族。</td></tr>
+            <tr><td>Mode VDO</td><td>Discover Modes ACK</td><td>描述某個 SVID 底下可進入的 mode，例如 DP Alt Mode 或 vendor mode。</td></tr>
+          </tbody>
+        </table>
+        <div class="callout" style="margin-top:1rem">
+          <p><b>好記：</b>VDM Header 先看 <code>SVID</code>、<code>Command Type</code>、<code>Command</code>。如果 Command 是 Discover Identity/SVIDs/Modes，後面的 VDO 才是回答內容。</p>
+        </div>
+      </section>
+
+      <section id="decoder">
+        <div class="section-head">
+          <h2>自動快速解析器</h2>
+          <p>貼上 16 進制數字，它會依長度與 Header 自動分類：Header、完整 PD data 欄、或單一 32-bit object。</p>
+        </div>
+        <div class="decoder decoder-wide">
+          <h3>Auto Packet Decoder</h3>
+          <div class="decoder-controls">
+            <label>輸入 Hex / Analyzer Data 欄
+              <input id="autoInput" value="A1 11 2C 91 01 1D" spellcheck="false">
+            </label>
+            <label>輸入格式
+              <select id="autoEndian">
+                <option value="wire">Wire bytes little endian</option>
+                <option value="value">Value hex</option>
+              </select>
+            </label>
+          </div>
+          <div class="result" id="autoSummary"></div>
+          <div class="analysis-stack" id="autoDetails"></div>
+        </div>
+      </section>
+
+      <section id="flow">
+        <div class="section-head">
+          <h2>建議解析流程</h2>
+          <p>拿到 analyzer 一列資料時，就照這個順序拆。</p>
+        </div>
+        <ol class="flow">
+          <li>先看 SOP 是 <code>SOP</code>、<code>SOP'</code> 還是 <code>SOP''</code>，決定這包是給裝置還是 cable plug。</li>
+          <li>Data 欄前 2 bytes 放到 <code>16-bit Header</code>，看 NDO / Obj 與 Message Type。</li>
+          <li><code>Obj = 0</code> 通常是 Control Message，後面沒有 32-bit Data Object。</li>
+          <li><code>Obj &gt; 0</code> 時，Header 後面每 4 bytes 拆成一個 32-bit Data Object。</li>
+          <li>若 Message Type 是 <code>Source_Capabilities</code> 或 <code>Sink_Capabilities</code>，再看每個 PDO 的 bit <code>31:30</code> 判斷 Fixed / Battery / Variable / APDO。</li>
+          <li>CRC 與 EOP 實際線上存在，但 analyzer 通常隱藏；GoodCRC 是 message，不是尾端 CRC 欄位。</li>
+        </ol>
+      </section>
+
+      <p class="footer">
+        本頁是學習與除錯用速查整理。版本相依或 vendor-defined 欄位仍需搭配實際 PD revision、線材能力與 analyzer raw capture 判斷。
+      </p>
+    </main>
+  </div>
+
+  <script>
+    const controlMessages = {
+      1: "GoodCRC",
+      2: "GotoMin",
+      3: "Accept",
+      4: "Reject",
+      5: "Ping",
+      6: "PS_RDY",
+      7: "Get_Source_Cap",
+      8: "Get_Sink_Cap",
+      9: "DR_SWAP",
+      10: "PR_SWAP",
+      11: "VCONN_SWAP",
+      12: "Wait",
+      13: "Soft_Reset",
+      14: "Data_Reset",
+      15: "Data_Reset_Complete",
+      16: "Not_Supported",
+      17: "Get_Source_Cap_Extended",
+      18: "Get_Status",
+      19: "FR_SWAP",
+      20: "Get_PPS_Status",
+      21: "Get_Country_Codes",
+      22: "Get_Sink_Cap_Extended",
+      23: "Get_Source_Info",
+      24: "Get_Revision"
+    };
+
+    const dataMessages = {
+      1: "Source_Capabilities",
+      2: "Request",
+      3: "BIST",
+      4: "Sink_Capabilities",
+      5: "Battery_Status",
+      6: "Alert",
+      7: "Get_Country_Info",
+      8: "Enter_USB",
+      9: "EPR_Request",
+      10: "EPR_Mode",
+      11: "Source_Info",
+      12: "Revision",
+      15: "Vendor_Defined"
+    };
+
+    const commandNames = {
+      1: "Discover Identity",
+      2: "Discover SVIDs",
+      3: "Discover Modes",
+      4: "Enter Mode",
+      5: "Exit Mode",
+      6: "Attention"
+    };
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll("\"", "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function cleanHex(text) {
+      return text.replace(/0x/gi, "").replace(/[^0-9a-f]/gi, "").toUpperCase();
+    }
+
+    function normalizeHex(text, bytes) {
+      return cleanHex(text).padStart(bytes * 2, "0").slice(-(bytes * 2));
+    }
+
+    function reverseBytes(hex) {
+      const pairs = hex.match(/../g) || [];
+      return pairs.reverse().join("");
+    }
+
+    function parseChunk(hex, bytes, endian) {
+      const normalized = normalizeHex(hex, bytes);
+      const parsed = endian === "wire" ? reverseBytes(normalized) : normalized;
+      return { clean: normalized, parsed, value: Number.parseInt(parsed, 16) || 0 };
+    }
+
+    function bits(value, hi, lo) {
+      return Math.floor(value / 2 ** lo) % 2 ** (hi - lo + 1);
+    }
+
+    function bin(value, width) {
+      return value.toString(2).padStart(width, "0");
+    }
+
+    function card(label, value) {
+      return `<div><b>${escapeHtml(label)}</b><span>${escapeHtml(value)}</span></div>`;
+    }
+
+    function rows(items) {
+      return `<table><tbody>${items.map(([name, raw, meaning]) => `
+        <tr>
+          <td>${escapeHtml(name)}</td>
+          <td><code>${escapeHtml(raw)}</code></td>
+          <td>${escapeHtml(meaning)}</td>
+        </tr>
+      `).join("")}</tbody></table>`;
+    }
+
+    function analysisCard(title, items, hints = []) {
+      const hintHtml = hints.length
+        ? `<ul class="hint-list">${hints.map((hint) => `<li>${escapeHtml(hint)}</li>`).join("")}</ul>`
+        : "";
+      return `<article class="analysis-card"><h4>${escapeHtml(title)}</h4>${rows(items)}${hintHtml}</article>`;
+    }
+
+    function decodeHeaderValue(value) {
+      const ndo = bits(value, 14, 12);
+      const msgType = bits(value, 4, 0);
+      const isControl = ndo === 0;
+      const msgName = isControl
+        ? controlMessages[msgType] || "Reserved / Unknown Control"
+        : dataMessages[msgType] || "Reserved / Unknown Data";
+      const revRaw = bits(value, 7, 6);
+      return {
+        extended: bits(value, 15, 15),
+        ndo,
+        msgId: bits(value, 11, 9),
+        powerRole: bits(value, 8, 8),
+        revRaw,
+        rev: ["PD1.0", "PD2.0", "PD3.0", "Reserved"][revRaw],
+        dataRole: bits(value, 5, 5),
+        msgType,
+        msgName,
+        isControl
+      };
+    }
+
+    function headerRows(decoded) {
+      return [
+        ["Extended", bin(decoded.extended, 1), decoded.extended ? "Extended Message，後面還會有 Extended Message Header" : "Normal Message"],
+        ["NDO / Obj", bin(decoded.ndo, 3), `${decoded.ndo} 個 32-bit Data Object`],
+        ["Message ID", bin(decoded.msgId, 3), `序號 ${decoded.msgId}`],
+        ["Power Role", bin(decoded.powerRole, 1), decoded.powerRole ? "Source" : "Sink"],
+        ["Spec Revision", bin(decoded.revRaw, 2), decoded.rev],
+        ["Data Role", bin(decoded.dataRole, 1), decoded.dataRole ? "DFP" : "UFP"],
+        ["Message Type", bin(decoded.msgType, 5), decoded.msgName]
+      ];
+    }
+
+    function decodePdo(value, context = "") {
+      const supplyType = bits(value, 31, 30);
+      const supplyName = ["Fixed PDO", "Battery PDO", "Variable PDO", "APDO / PPS"][supplyType];
+      const peakMap = ["100%", "130%", "150%", "200%"];
+      const rowsOut = [["Supply Type", bin(supplyType, 2), supplyName]];
+
+      if (supplyType === 0) {
+        rowsOut.push(
+          ["Dual-Role Power", bin(bits(value, 29, 29), 1), bits(value, 29, 29) ? "支援 PR_SWAP" : "不支援 PR_SWAP"],
+          ["USB Suspend", bin(bits(value, 28, 28), 1), bits(value, 28, 28) ? "支援 USB Suspend" : "不支援 USB Suspend"],
+          ["Unconstrained Power", bin(bits(value, 27, 27), 1), bits(value, 27, 27) ? "不受限電源" : "受限電源"],
+          ["USB Communications", bin(bits(value, 26, 26), 1), bits(value, 26, 26) ? "具 USB data 能力" : "不宣告 USB data 能力"],
+          ["Dual-Role Data", bin(bits(value, 25, 25), 1), bits(value, 25, 25) ? "支援 DR_SWAP" : "不支援 DR_SWAP"],
+          ["Peak Current", bin(bits(value, 24, 23), 2), peakMap[bits(value, 24, 23)]],
+          ["Reserved", bin(bits(value, 22, 20), 3), bits(value, 22, 20) === 0 ? "正常為 000" : "非 000，確認 endian 或 object 類型"],
+          ["Voltage", bits(value, 19, 10), `${(bits(value, 19, 10) * 0.05).toFixed(2)} V`],
+          ["Maximum Current", bits(value, 9, 0), `${(bits(value, 9, 0) * 0.01).toFixed(2)} A`]
+        );
+      } else if (supplyType === 1) {
+        rowsOut.push(
+          ["Maximum Voltage", bits(value, 29, 20), `${(bits(value, 29, 20) * 0.05).toFixed(2)} V`],
+          ["Minimum Voltage", bits(value, 19, 10), `${(bits(value, 19, 10) * 0.05).toFixed(2)} V`],
+          ["Maximum Power", bits(value, 9, 0), `${(bits(value, 9, 0) * 0.25).toFixed(2)} W`]
+        );
+      } else if (supplyType === 2) {
+        rowsOut.push(
+          ["Maximum Voltage", bits(value, 29, 20), `${(bits(value, 29, 20) * 0.05).toFixed(2)} V`],
+          ["Minimum Voltage", bits(value, 19, 10), `${(bits(value, 19, 10) * 0.05).toFixed(2)} V`],
+          ["Maximum Current", bits(value, 9, 0), `${(bits(value, 9, 0) * 0.01).toFixed(2)} A`]
+        );
+      } else {
+        rowsOut.push(
+          ["APDO Type", bin(bits(value, 29, 28), 2), bits(value, 29, 28) === 0 ? "PPS / Programmable Supply" : "其他 APDO 或版本相依"],
+          ["PPS Power Limited", bin(bits(value, 27, 27), 1), bits(value, 27, 27) ? "Power limited" : "Not power limited"],
+          ["Maximum Voltage", bits(value, 24, 17), `${(bits(value, 24, 17) * 0.1).toFixed(2)} V`],
+          ["Minimum Voltage", bits(value, 15, 8), `${(bits(value, 15, 8) * 0.1).toFixed(2)} V`],
+          ["Maximum Current", bits(value, 6, 0), `${(bits(value, 6, 0) * 0.05).toFixed(2)} A`]
+        );
+      }
+
+      const titlePrefix = context ? `${context} ` : "";
+      return analysisCard(`${titlePrefix}${supplyName}`, rowsOut, ["PDO 類型由 bit 31:30 決定。"]);
+    }
+
+    function decodeRdo(value, pps = false) {
+      const common = [
+        ["Object Position", bin(bits(value, 31, 28), 4), `要求 Source_Capabilities 中第 ${bits(value, 31, 28)} 個 object`],
+        ["Capability Mismatch", bin(bits(value, 25, 25), 1), bits(value, 25, 25) ? "Yes，需求超過 Source 能力" : "No"],
+        ["USB Communications", bin(bits(value, 24, 24), 1), bits(value, 24, 24) ? "Yes" : "No"],
+        ["No USB Suspend", bin(bits(value, 23, 23), 1), bits(value, 23, 23) ? "Yes" : "No"]
+      ];
+
+      if (pps) {
+        return analysisCard("PPS Request RDO", [
+          ...common,
+          ["Reserved", bin(bits(value, 27, 26), 2), bits(value, 27, 26) === 0 ? "正常為 00" : "非 00，確認類型"],
+          ["Output Voltage", bits(value, 22, 9), `${(bits(value, 22, 9) * 0.02).toFixed(2)} V`],
+          ["Operating Current", bits(value, 6, 0), `${(bits(value, 6, 0) * 0.05).toFixed(2)} A`]
+        ], ["PPS RDO 有直接電壓欄位 bits 22:9。"]);
+      }
+
+      return analysisCard("Fixed / Variable Request RDO", [
+        ...common,
+        ["GiveBack", bin(bits(value, 27, 27), 1), bits(value, 27, 27) ? "Yes" : "No"],
+        ["Reserved", bin(bits(value, 22, 20), 3), bits(value, 22, 20) === 0 ? "正常為 000" : "非 000，確認類型"],
+        ["Operating Current", bits(value, 19, 10), `${(bits(value, 19, 10) * 0.01).toFixed(2)} A`],
+        ["Maximum Current", bits(value, 9, 0), `${(bits(value, 9, 0) * 0.01).toFixed(2)} A`]
+      ], ["Fixed / Variable RDO 沒有直接電壓欄位，電壓由 Object Position 指到的 PDO 決定。"]);
+    }
+
+    function decodeVdm(value) {
+      const svid = bits(value, 31, 16);
+      const commandType = bits(value, 7, 6);
+      const command = bits(value, 4, 0);
+      const commandTypes = ["Initiator", "ACK", "NAK", "BUSY"];
+      return analysisCard("VDM Header", [
+        ["SVID", `0x${svid.toString(16).toUpperCase().padStart(4, "0")}`, svid === 0xff00 ? "USB-IF SVID" : "Vendor / Alternate Mode SVID"],
+        ["VDM Type", bin(bits(value, 15, 15), 1), bits(value, 15, 15) ? "Structured VDM" : "Unstructured VDM"],
+        ["Structured VDM Version", bin(bits(value, 14, 13), 2), bits(value, 14, 13) === 0 ? "VDM v1.0" : bits(value, 14, 13) === 1 ? "VDM v2.0" : "版本相依 / reserved"],
+        ["Object Position", bin(bits(value, 10, 8), 3), `${bits(value, 10, 8)}`],
+        ["Command Type", bin(commandType, 2), commandTypes[commandType]],
+        ["Command", bin(command, 5), commandNames[command] || "Vendor / Reserved Command"]
+      ], ["Vendor_Defined message 的第一個 32-bit object 通常用這個解析。"]);
+    }
+
+    function decodeGeneric(value) {
+      return analysisCard("Generic 32-bit Object", [
+        ["Full value", `0x${value.toString(16).toUpperCase().padStart(8, "0")}`, `${value}`],
+        ["Byte 3", `0x${bits(value, 31, 24).toString(16).toUpperCase().padStart(2, "0")}`, bits(value, 31, 24)],
+        ["Byte 2", `0x${bits(value, 23, 16).toString(16).toUpperCase().padStart(2, "0")}`, bits(value, 23, 16)],
+        ["Byte 1", `0x${bits(value, 15, 8).toString(16).toUpperCase().padStart(2, "0")}`, bits(value, 15, 8)],
+        ["Byte 0", `0x${bits(value, 7, 0).toString(16).toUpperCase().padStart(2, "0")}`, bits(value, 7, 0)]
+      ], ["若 Header 無法判斷類型，先用 Generic 保留完整 raw。"]);
+    }
+
+    function decodeObjectByMessage(value, messageName, index) {
+      if (messageName === "Source_Capabilities") {
+        return decodePdo(value, `Object ${index}`);
+      }
+      if (messageName === "Sink_Capabilities") {
+        return decodePdo(value, `Sink Object ${index}`);
+      }
+      if (messageName === "Request") {
+        return decodeRdo(value, false);
+      }
+      if (messageName === "EPR_Request") {
+        return decodeRdo(value, true);
+      }
+      if (messageName === "Vendor_Defined") {
+        return index === 1 ? decodeVdm(value) : decodeGeneric(value);
+      }
+      if (messageName === "BIST") {
+        return analysisCard("BIST Data Object", [
+          ["BIST Mode", bin(bits(value, 31, 28), 4), `${bits(value, 31, 28)}`],
+          ["Test Data / Reserved", `0x${bits(value, 27, 0).toString(16).toUpperCase()}`, bits(value, 27, 0)]
+        ]);
+      }
+      if (messageName === "Alert") {
+        return analysisCard("Alert Data Object", [
+          ["Type of Alert", `0x${bits(value, 31, 24).toString(16).toUpperCase().padStart(2, "0")}`, "OCP/OVP/OTP/source/battery 等事件 bitmap"],
+          ["Fixed Batteries", bin(bits(value, 23, 20), 4), bits(value, 23, 20)],
+          ["Hot Swappable Batteries", bin(bits(value, 19, 16), 4), bits(value, 19, 16)],
+          ["Reserved", `0x${bits(value, 15, 0).toString(16).toUpperCase().padStart(4, "0")}`, bits(value, 15, 0)]
+        ]);
+      }
+      return decodeGeneric(value);
+    }
+
+    function decodeSingleObject(hex, endian) {
+      const chunk = parseChunk(hex, 4, endian);
+      const value = chunk.value;
+      const possible = [
+        decodePdo(value, "可能是"),
+        decodeRdo(value, false),
+        decodeRdo(value, true),
+        decodeVdm(value),
+        decodeGeneric(value)
+      ];
+      autoSummary.innerHTML = [
+        card("輸入類型", "單一 32-bit Data Object"),
+        card("Clean hex", chunk.clean),
+        card("Parsed value", `0x${chunk.parsed}`),
+        card("提示", "沒有 Header 時只能列出可能解讀")
+      ].join("");
+      autoDetails.innerHTML = possible.join("");
+    }
+
+    function decodeFullData(hex, endian) {
+      const headerHex = hex.slice(0, 4);
+      const headerChunk = parseChunk(headerHex, 2, endian);
+      const header = decodeHeaderValue(headerChunk.value);
+      const rest = hex.slice(4);
+      const availableObjects = Math.floor(rest.length / 8);
+      const expectedObjects = header.ndo;
+      const warnings = [];
+      if (expectedObjects !== availableObjects) {
+        warnings.push(`Header 說有 ${expectedObjects} 個 object，但輸入中可拆出 ${availableObjects} 個。請確認是否少貼/多貼 bytes。`);
+      }
+      if (rest.length % 8 !== 0) {
+        warnings.push("Header 後面的 hex 不是 4 bytes 對齊，最後一段可能不完整。");
+      }
+
+      autoSummary.innerHTML = [
+        card("輸入類型", "完整 Analyzer Data 欄"),
+        card("Header", `0x${headerChunk.parsed}`),
+        card("Message", header.msgName),
+        card("Objects", `${availableObjects} parsed / ${expectedObjects} expected`)
+      ].join("");
+
+      const detailCards = [
+        analysisCard("16-bit Message Header", headerRows(header), warnings)
+      ];
+      for (let index = 0; index < availableObjects; index += 1) {
+        const objectHex = rest.slice(index * 8, index * 8 + 8);
+        const objectChunk = parseChunk(objectHex, 4, endian);
+        detailCards.push(analysisCard(`Object ${index + 1} Raw`, [
+          ["Wire / input chunk", objectChunk.clean, "Analyzer Data 欄中的 4 bytes"],
+          ["Parsed value", `0x${objectChunk.parsed}`, "依輸入格式轉成 bit 定義用的 32-bit value"]
+        ]));
+        detailCards.push(decodeObjectByMessage(objectChunk.value, header.msgName, index + 1));
+      }
+      autoDetails.innerHTML = detailCards.join("");
+    }
+
+    function decodeAuto() {
+      const hex = cleanHex(autoInput.value);
+      const endian = autoEndian.value;
+      if (!hex) {
+        autoSummary.innerHTML = card("狀態", "請輸入 16 進制數字");
+        autoDetails.innerHTML = "";
+        return;
+      }
+      if (hex.length % 2 !== 0) {
+        autoSummary.innerHTML = card("狀態", "hex 長度不是完整 byte，請補 0 或檢查輸入");
+        autoDetails.innerHTML = "";
+        return;
+      }
+      if (hex.length === 4) {
+        const headerChunk = parseChunk(hex, 2, endian);
+        const header = decodeHeaderValue(headerChunk.value);
+        autoSummary.innerHTML = [
+          card("輸入類型", "16-bit Message Header"),
+          card("Clean hex", headerChunk.clean),
+          card("Parsed header", `0x${headerChunk.parsed}`),
+          card("Message", header.msgName)
+        ].join("");
+        autoDetails.innerHTML = analysisCard("16-bit Message Header", headerRows(header));
+        return;
+      }
+      if (hex.length === 8) {
+        decodeSingleObject(hex, endian);
+        return;
+      }
+      if (hex.length >= 12) {
+        decodeFullData(hex, endian);
+        return;
+      }
+      autoSummary.innerHTML = [
+        card("輸入類型", "不完整資料"),
+        card("Clean hex", hex),
+        card("建議", "Header 需要 2 bytes；Data Object 需要 4 bytes")
+      ].join("");
+      autoDetails.innerHTML = "";
+    }
+
+    const autoInput = document.querySelector("#autoInput");
+    const autoEndian = document.querySelector("#autoEndian");
+    const autoSummary = document.querySelector("#autoSummary");
+    const autoDetails = document.querySelector("#autoDetails");
+
+    [autoInput, autoEndian].forEach((el) => el.addEventListener("input", decodeAuto));
+    decodeAuto();
+  </script>
+</body>
+</html>

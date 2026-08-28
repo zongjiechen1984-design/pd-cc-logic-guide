@@ -1,0 +1,8 @@
+node_modules/
+dist/
+outputs/
+MD04_PD/
+md04_media/
+*.pptx
+*.png
+*.inspect.ndjson
