@@ -1,0 +1,1601 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>USB PD Packet Header Tree</title>
+  <style>
+    :root {
+      --bg: #f4efe4;
+      --ink: #14211e;
+      --muted: #66736d;
+      --card: #fffaf1;
+      --line: #d8c7aa;
+      --deep: #12352f;
+      --blue: #315f7d;
+      --amber: #efb755;
+      --mint: #b9e3d0;
+      --red: #b8503a;
+      --mono: "Cascadia Mono", "Consolas", monospace;
+      --sans: "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+      --serif: "Noto Serif TC", "Georgia", serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 15% 8%, rgba(239, 183, 85, 0.34), transparent 22rem),
+        radial-gradient(circle at 90% 12%, rgba(185, 227, 208, 0.42), transparent 24rem),
+        linear-gradient(135deg, #f8f0df, #eef5eb 58%, #e5eeea);
+      font-family: var(--sans);
+      line-height: 1.65;
+    }
+
+    .page {
+      width: min(1180px, calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 2rem 0 4rem;
+    }
+
+    header {
+      display: grid;
+      gap: 1rem;
+      padding: clamp(1.4rem, 4vw, 3rem);
+      border-radius: 1.8rem;
+      color: #fff8e8;
+      background:
+        linear-gradient(120deg, rgba(18, 53, 47, 0.95), rgba(40, 79, 72, 0.9)),
+        repeating-linear-gradient(90deg, transparent 0 2rem, rgba(255, 255, 255, 0.06) 2rem calc(2rem + 1px));
+      box-shadow: 0 22px 54px rgba(21, 31, 28, 0.16);
+    }
+
+    header h1 {
+      max-width: 840px;
+      margin: 0;
+      font-family: var(--serif);
+      font-size: clamp(2.1rem, 5vw, 4.8rem);
+      line-height: 1.1;
+      letter-spacing: -0.05em;
+    }
+
+    header p {
+      max-width: 720px;
+      margin: 0;
+      color: rgba(255, 248, 232, 0.82);
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      margin-top: 1rem;
+    }
+
+    button,
+    a.button {
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 999px;
+      padding: 0.65rem 0.95rem;
+      color: #fff8e8;
+      background: rgba(255, 255, 255, 0.1);
+      font: 700 0.92rem var(--sans);
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    button:hover,
+    a.button:hover {
+      background: rgba(255, 255, 255, 0.18);
+    }
+
+    .decoder {
+      display: grid;
+      gap: 0.8rem;
+      margin-top: 0.4rem;
+      padding: 1rem;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 1.1rem;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .decoder-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.8rem;
+    }
+
+    .decoder label {
+      display: grid;
+      gap: 0.35rem;
+      font-weight: 800;
+    }
+
+    .decoder input {
+      width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.34);
+      border-radius: 0.85rem;
+      padding: 0.75rem 0.9rem;
+      color: #12352f;
+      background: #fffaf1;
+      font: 800 1rem var(--mono);
+    }
+
+    .decoder label.is-disabled {
+      opacity: 0.56;
+    }
+
+    .decoder input:disabled {
+      color: rgba(20, 33, 30, 0.48);
+      background: rgba(255, 250, 241, 0.58);
+      cursor: not-allowed;
+    }
+
+    .decoder small {
+      color: rgba(255, 248, 232, 0.78);
+      font-weight: 500;
+    }
+
+    .data-status {
+      color: rgba(255, 248, 232, 0.9);
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+
+    .result {
+      display: none;
+      gap: 0.45rem;
+      padding: 0.8rem 0.9rem;
+      border-radius: 0.9rem;
+      color: #12352f;
+      background: rgba(255, 250, 241, 0.92);
+    }
+
+    .result.show {
+      display: grid;
+    }
+
+    .result strong {
+      color: var(--red);
+    }
+
+    .result .bits {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: 0.25rem;
+      font-family: var(--mono);
+    }
+
+    .bit-group {
+      border: 1px solid rgba(20, 33, 30, 0.18);
+      border-radius: 0.55rem;
+      padding: 0.18rem 0.35rem;
+      color: var(--ink);
+      background: #fffdf8;
+    }
+
+    .bit-group.is-hit {
+      border-color: rgba(184, 80, 58, 0.44);
+      color: var(--red);
+      font-weight: 900;
+      background: rgba(184, 80, 58, 0.08);
+    }
+
+    .packet-line {
+      display: grid;
+      grid-template-columns: 0.9fr 1.55fr 1.8fr 0.85fr 0.75fr;
+      gap: 0.55rem;
+      margin: 1.4rem 0;
+    }
+
+    .segment {
+      position: relative;
+      min-height: 5rem;
+      padding: 1rem;
+      border: 1px solid var(--line);
+      border-radius: 1rem;
+      background: rgba(255, 250, 241, 0.86);
+      box-shadow: 0 12px 26px rgba(21, 31, 28, 0.08);
+    }
+
+    .segment strong {
+      display: block;
+      font-family: var(--mono);
+      color: var(--deep);
+    }
+
+    .segment span {
+      display: block;
+      margin-top: 0.25rem;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .segment.is-hit {
+      outline: 3px solid rgba(184, 80, 58, 0.34);
+      box-shadow: 0 14px 30px rgba(184, 80, 58, 0.18);
+    }
+
+    .tree {
+      display: grid;
+      gap: 0.85rem;
+    }
+
+    .script-map {
+      display: grid;
+      gap: 0.85rem;
+      margin-bottom: 0.9rem;
+    }
+
+    .branch-card {
+      border: 1px solid rgba(216, 199, 170, 0.95);
+      border-radius: 1rem;
+      padding: 0.95rem;
+      background:
+        linear-gradient(135deg, rgba(255, 253, 248, 0.95), rgba(239, 247, 238, 0.82));
+    }
+
+    .branch-title {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0 0 0.7rem;
+      color: var(--deep);
+      font-weight: 900;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0.13rem 0.48rem;
+      color: #fff8e8;
+      background: var(--blue);
+      font: 800 0.78rem var(--mono);
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 0.45rem;
+      align-items: stretch;
+    }
+
+    .flow-step {
+      position: relative;
+      min-height: 5.2rem;
+      border: 1px solid rgba(20, 33, 30, 0.14);
+      border-radius: 0.85rem;
+      padding: 0.65rem;
+      background: #fffdf8;
+    }
+
+    .flow-step::after {
+      content: ">";
+      position: absolute;
+      top: 50%;
+      right: -0.47rem;
+      transform: translateY(-50%);
+      color: var(--red);
+      font: 900 1rem var(--mono);
+      z-index: 2;
+    }
+
+    .flow-step:last-child::after {
+      content: "";
+    }
+
+    .flow-step b {
+      display: block;
+      color: var(--deep);
+      font-family: var(--mono);
+    }
+
+    .flow-step span {
+      display: block;
+      margin-top: 0.18rem;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .route-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.65rem;
+    }
+
+    .route {
+      border: 1px solid rgba(49, 95, 125, 0.2);
+      border-radius: 0.9rem;
+      padding: 0.75rem;
+      background: rgba(255, 250, 241, 0.86);
+    }
+
+    .route h4 {
+      margin: 0 0 0.45rem;
+      color: var(--deep);
+    }
+
+    .route ol {
+      margin: 0;
+      padding-left: 1.15rem;
+    }
+
+    .route li {
+      margin: 0.25rem 0;
+    }
+
+    .whiteboard {
+      overflow-x: auto;
+      padding: 0.4rem 0.1rem 0.6rem;
+    }
+
+    .sketch-tree,
+    .sketch-tree ul {
+      position: relative;
+      margin: 0;
+      padding-left: 2.2rem;
+      list-style: none;
+    }
+
+    .sketch-tree {
+      min-width: 980px;
+      padding-left: 0;
+    }
+
+    .sketch-tree ul::before {
+      content: "";
+      position: absolute;
+      top: 0.8rem;
+      bottom: 0.8rem;
+      left: 0.82rem;
+      border-left: 2px solid rgba(49, 95, 125, 0.28);
+    }
+
+    .sketch-tree li {
+      position: relative;
+      margin: 0.55rem 0;
+      padding-left: 1.2rem;
+    }
+
+    .sketch-tree li::before {
+      content: "";
+      position: absolute;
+      top: 1.18rem;
+      left: -1.38rem;
+      width: 2.45rem;
+      border-top: 2px solid rgba(49, 95, 125, 0.28);
+    }
+
+    .sketch-tree > li {
+      padding-left: 0;
+    }
+
+    .sketch-tree > li::before {
+      content: none;
+    }
+
+    .node {
+      display: inline-grid;
+      gap: 0.18rem;
+      max-width: 860px;
+      border: 2px solid rgba(18, 53, 47, 0.38);
+      border-radius: 0.9rem;
+      padding: 0.55rem 0.7rem;
+      color: var(--ink);
+      background: rgba(255, 253, 248, 0.96);
+      box-shadow: 4px 5px 0 rgba(49, 95, 125, 0.08);
+    }
+
+    .node strong {
+      color: var(--deep);
+      font-family: var(--mono);
+    }
+
+    .node small {
+      color: var(--muted);
+    }
+
+    .node.is-decision {
+      border-color: rgba(184, 80, 58, 0.45);
+      background: rgba(255, 250, 241, 0.98);
+    }
+
+    .node.is-end {
+      border-color: rgba(49, 95, 125, 0.42);
+      background: rgba(185, 227, 208, 0.34);
+    }
+
+    .sketch-tree li.can-toggle > .node {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .sketch-tree li.can-toggle > .node::before {
+      content: "v";
+      display: inline-grid;
+      place-items: center;
+      width: 1.25rem;
+      height: 1.25rem;
+      margin-right: 0.42rem;
+      border-radius: 999px;
+      color: #fff8e8;
+      background: var(--red);
+      font: 900 0.8rem var(--mono);
+    }
+
+    .sketch-tree li.can-toggle.is-collapsed > .node::before {
+      content: ">";
+    }
+
+    .sketch-tree li.can-toggle.is-collapsed > ul,
+    .sketch-tree li.can-toggle.is-collapsed > .combo-grid {
+      display: none;
+    }
+
+    .sketch-tree li.can-toggle > .node:focus-visible {
+      outline: 3px solid rgba(239, 183, 85, 0.72);
+      outline-offset: 3px;
+    }
+
+    .combo-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.35rem;
+      margin-top: 0.45rem;
+    }
+
+    .combo-grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .combo {
+      border: 1px solid rgba(20, 33, 30, 0.13);
+      border-radius: 0.55rem;
+      padding: 0.42rem 0.48rem;
+      background: #fffdf8;
+      font-size: 0.88rem;
+    }
+
+    .combo code {
+      font-weight: 900;
+    }
+
+    .combo .term {
+      display: block;
+      margin-top: 0.28rem;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }
+
+    .combo.is-reserved {
+      color: #7b756d;
+      background: rgba(216, 199, 170, 0.18);
+    }
+
+    details {
+      border: 1px solid var(--line);
+      border-radius: 1rem;
+      background: rgba(255, 250, 241, 0.9);
+      box-shadow: 0 10px 24px rgba(21, 31, 28, 0.07);
+      overflow: clip;
+    }
+
+    summary {
+      cursor: pointer;
+      padding: 0.9rem 1rem;
+      font-weight: 800;
+      color: var(--deep);
+      background: linear-gradient(90deg, rgba(185, 227, 208, 0.46), rgba(255, 250, 241, 0));
+    }
+
+    summary::marker {
+      color: var(--red);
+    }
+
+    .inside {
+      display: grid;
+      gap: 1rem;
+      padding: 1rem;
+    }
+
+    .subtree {
+      display: grid;
+      gap: 0.6rem;
+      padding-left: 1rem;
+      border-left: 3px solid rgba(49, 95, 125, 0.24);
+    }
+
+    .note {
+      padding: 0.8rem 0.95rem;
+      border-left: 4px solid var(--red);
+      border-radius: 0.85rem;
+      background: rgba(184, 80, 58, 0.08);
+      color: var(--muted);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 0.9rem;
+      background: #fffdf8;
+    }
+
+    th,
+    td {
+      padding: 0.75rem 0.85rem;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: #fff8e8;
+      background: var(--deep);
+      font-size: 0.9rem;
+    }
+
+    code {
+      padding: 0.08rem 0.28rem;
+      border-radius: 0.35rem;
+      color: #244a64;
+      background: rgba(49, 95, 125, 0.12);
+      font-family: var(--mono);
+    }
+
+    .bitbar {
+      display: grid;
+      grid-template-columns: 1fr 3fr 3fr 1fr 2fr 1fr 5fr;
+      border: 1px solid var(--line);
+      border-radius: 1rem;
+      overflow: hidden;
+      background: #fffdf8;
+    }
+
+    .bitbar div {
+      min-height: 4.3rem;
+      padding: 0.65rem;
+      border-right: 1px solid var(--line);
+    }
+
+    .bitbar div:last-child {
+      border-right: 0;
+    }
+
+    .bitbar b {
+      display: block;
+      font-family: var(--mono);
+      color: var(--deep);
+      font-size: 0.8rem;
+    }
+
+    .bitbar span {
+      display: block;
+      margin-top: 0.2rem;
+      font-size: 0.9rem;
+    }
+
+    .grid-two {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    .source {
+      margin-top: 2rem;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    [data-field].is-hit {
+      outline: 2px solid rgba(184, 80, 58, 0.32);
+      outline-offset: -2px;
+      background: rgba(184, 80, 58, 0.06);
+    }
+
+    tr.is-match > td,
+    .value-pill.is-match {
+      color: var(--red);
+      font-weight: 900;
+    }
+
+    tr.is-match code,
+    .value-pill.is-match code {
+      color: var(--red);
+      background: rgba(184, 80, 58, 0.1);
+    }
+
+    @media (max-width: 860px) {
+      .packet-line,
+      .grid-two,
+      .decoder-grid,
+      .flow,
+      .route-grid,
+      .combo-grid,
+      .combo-grid.two {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-step::after {
+        content: "v";
+        top: auto;
+        right: 50%;
+        bottom: -0.6rem;
+        transform: translateX(50%);
+      }
+
+      .bitbar {
+        grid-template-columns: 1fr;
+      }
+
+      .bitbar div {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .bitbar div:last-child {
+        border-bottom: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <h1>USB PD 封包樹狀解析：Header 完整展開版</h1>
+      <p>以 USB PD R3.2 V1.2, Table 6.2 Message Header 與 Table 6.3 Number of Data Objects 為基準，從封包外層一路拆到 Header 每個 bit。</p>
+      <div class="toolbar">
+        <button type="button" id="expandAll">全部展開</button>
+        <button type="button" id="collapseAll">全部收合</button>
+        <a class="button" href="./pd-cc-logic-spec-summary.html">回主教材</a>
+      </div>
+      <div class="decoder" aria-label="PD packet hex decoder">
+        <div class="decoder-grid">
+          <label for="headerInput">
+            第一行：輸入 16-bit Header
+            <input id="headerInput" type="text" inputmode="text" spellcheck="false" placeholder="例如：A1 11 或 0x11A1">
+            <small>Analyzer Data 欄的前 2 bytes 通常是 Header；例如 <code>A1 11</code> 會依 little-endian 解析成 <code>0x11A1</code>。</small>
+          </label>
+          <label for="objectInput" id="objectInputLabel" class="is-disabled">
+            第二行：Data Object / Payload
+            <input id="objectInput" type="text" inputmode="text" spellcheck="false" placeholder="例如：2C 91 01 1D" disabled>
+            <small>先由 Header 的 <code>Extended</code> 與 <code>NDO</code> 決定是否需要填。Control Message 通常不用填第二行。</small>
+          </label>
+        </div>
+        <div id="dataStatus" class="data-status">請先輸入第一行 Header，系統會判斷是否需要第二行。</div>
+        <div id="decodeResult" class="result" aria-live="polite"></div>
+      </div>
+    </header>
+
+    <section class="packet-line" aria-label="USB PD packet structure">
+      <div class="segment" data-packet-field="sop"><strong>SOP*</strong><span>Start of Packet，決定收件人</span></div>
+      <div class="segment" data-packet-field="header"><strong>16-bit Header</strong><span>每個 message 一定從這裡開始</span></div>
+      <div class="segment" data-packet-field="objects"><strong>0~7 Data Object</strong><span>Data Message 或 Extended Message 才依條件出現</span></div>
+      <div class="segment" data-packet-field="crc"><strong>CRC</strong><span>32-bit，PHY/Protocol 檢查</span></div>
+      <div class="segment" data-packet-field="eop"><strong>EOP</strong><span>End of Packet</span></div>
+    </section>
+
+    <section class="tree">
+      <details id="whiteboard-tree" open>
+        <summary>手繪式樹狀展開：SOP* -> Header -> Control/Data/Extended -> CRC -> EOP</summary>
+        <div class="inside">
+          <div class="note">這一區照你的白板圖閱讀：左邊是封包起點，往右一路分支。所有分支最後都會收斂到 <code>CRC</code> 與 <code>EOP</code>；差別在於 <code>SOP*</code> 決定收件對象，<code>Header</code> 決定後面有沒有 Data Object，以及 Message Type 要查哪一張表。</div>
+
+          <div class="whiteboard">
+            <ul class="sketch-tree">
+              <li>
+                <span class="node is-decision"><strong>PD Packet</strong><small>實體線上完整順序：SOP* -> 16-bit Message Header -> optional Data Portion -> CRC -> EOP</small></span>
+                <ul>
+                  <li>
+                    <span class="node"><strong>SOP</strong><small>一般 Port-to-Port：Source / Sink 之間的主要 PD message。</small></span>
+                    <ul>
+                      <li>
+                        <span class="node is-decision"><strong>16-bit Header</strong><small>SOP 情境：bit8=Power Role，bit5=Data Role。</small></span>
+                        <ul>
+                          <li>
+                            <span class="node"><strong>bit15 Extended</strong><small>決定這包是不是 Extended Message。</small></span>
+                            <div class="combo-grid two">
+                              <div class="combo" data-match="extended:0"><code>0</code> Control/Data Message：再看 NDO。NDO=0 是 Control；NDO&gt;0 是 Data。</div>
+                              <div class="combo" data-match="extended:1"><code>1</code> Extended Message：Header 後面接 Extended Message Header + payload。</div>
+                            </div>
+                          </li>
+                          <li>
+                            <span class="node"><strong>bit14:12 NDO</strong><small>Number of Data Objects，決定 Header 後面有幾個 32-bit Data Object。</small></span>
+                            <div class="combo-grid">
+                              <div class="combo" data-match="ndo:000"><code>000</code> 0 objects：Control Message，Header 後直接 CRC -> EOP。</div>
+                              <div class="combo" data-match="ndo:001"><code>001</code> 1 object：Header 後 4 bytes data。</div>
+                              <div class="combo" data-match="ndo:010"><code>010</code> 2 objects：Header 後 8 bytes data。</div>
+                              <div class="combo" data-match="ndo:011"><code>011</code> 3 objects：Header 後 12 bytes data。</div>
+                              <div class="combo" data-match="ndo:100"><code>100</code> 4 objects：Header 後 16 bytes data。</div>
+                              <div class="combo" data-match="ndo:101"><code>101</code> 5 objects：Header 後 20 bytes data。</div>
+                              <div class="combo" data-match="ndo:110"><code>110</code> 6 objects：Header 後 24 bytes data。</div>
+                              <div class="combo" data-match="ndo:111"><code>111</code> 7 objects：一般 Data Message 最大數量。</div>
+                            </div>
+                          </li>
+                          <li>
+                            <span class="node"><strong>bit11:9 MessageID</strong><small>0~7 rolling counter，用於 retry 與 GoodCRC 對應。</small></span>
+                            <div class="combo-grid">
+                              <div class="combo" data-match="mid:000"><code>000</code> MessageID 0。</div>
+                              <div class="combo" data-match="mid:001"><code>001</code> MessageID 1。</div>
+                              <div class="combo" data-match="mid:010"><code>010</code> MessageID 2。</div>
+                              <div class="combo" data-match="mid:011"><code>011</code> MessageID 3。</div>
+                              <div class="combo" data-match="mid:100"><code>100</code> MessageID 4。</div>
+                              <div class="combo" data-match="mid:101"><code>101</code> MessageID 5。</div>
+                              <div class="combo" data-match="mid:110"><code>110</code> MessageID 6。</div>
+                              <div class="combo" data-match="mid:111"><code>111</code> MessageID 7，下一個新 ID 回到 0。</div>
+                            </div>
+                          </li>
+                          <li>
+                            <span class="node"><strong>bit8 Power Role</strong><small>SOP 封包才用 Source/Sink 解讀。</small></span>
+                            <div class="combo-grid two">
+                              <div class="combo" data-match="bit8:0"><code>0</code> Sink：送出這包 SOP message 的 power role 是 Sink。</div>
+                              <div class="combo" data-match="bit8:1"><code>1</code> Source：送出這包 SOP message 的 power role 是 Source。</div>
+                            </div>
+                          </li>
+                          <li>
+                            <span class="node"><strong>bit7:6 Spec Revision</strong><small>宣告這包 message 使用的 USB PD specification revision。</small></span>
+                            <div class="combo-grid">
+                              <div class="combo" data-match="spec:00"><code>00</code> Rev1.0 deprecated；R3.2 receiver 應視為 Rev2.0。</div>
+                              <div class="combo" data-match="spec:01"><code>01</code> Rev2.0。</div>
+                              <div class="combo" data-match="spec:10"><code>10</code> Rev3.x。</div>
+                              <div class="combo is-reserved" data-match="spec:11"><code>11</code> Reserved。</div>
+                            </div>
+                          </li>
+                          <li>
+                            <span class="node"><strong>bit5 Data Role</strong><small>SOP 封包才用 DFP/UFP 解讀。</small></span>
+                            <div class="combo-grid two">
+                              <div class="combo" data-match="bit5:0"><code>0</code> UFP：送出這包 SOP message 的 data role 是 UFP。</div>
+                              <div class="combo" data-match="bit5:1"><code>1</code> DFP：送出這包 SOP message 的 data role 是 DFP。</div>
+                            </div>
+                          </li>
+                          <li>
+                            <span class="node is-decision"><strong>bit4:0 Message Type</strong><small>先看 bit15 與 NDO，才知道要查 Control / Data / Extended 哪一張表。</small></span>
+                            <ul>
+                              <li>
+                                <span class="node is-end"><strong>Control</strong><small>Extended=0 且 NDO=000：SOP -> Header -> Control Type -> CRC -> EOP。</small></span>
+                                <div class="combo-grid" data-message-table="control"></div>
+                              </li>
+                              <li>
+                                <span class="node is-end"><strong>Data</strong><small>Extended=0 且 NDO&gt;000：SOP -> Header -> Data Type -> Data Object -> CRC -> EOP。</small></span>
+                                <div class="combo-grid" data-message-table="data"></div>
+                                <ul data-data-object-tree></ul>
+                              </li>
+                              <li>
+                                <span class="node is-end"><strong>Extended</strong><small>Extended=1：SOP -> Header -> Extended Header -> Payload -> CRC -> EOP。</small></span>
+                                <div class="combo-grid" data-message-table="extended"></div>
+                              </li>
+                            </ul>
+                          </li>
+                        </ul>
+                      </li>
+                    </ul>
+                  </li>
+
+                  <li>
+                    <span class="node"><strong>SOP'</strong><small>Cable Plug Communication：常用於 cable identity / SVID / modes 等。</small></span>
+                    <ul>
+                      <li>
+                        <span class="node is-decision"><strong>16-bit Header</strong><small>SOP' 情境：bit8=Cable Plug，bit5=Reserved。</small></span>
+                        <ul>
+                          <li>
+                            <span class="node"><strong>bit15 Extended</strong><small>決定 SOP' 這包是不是 Extended Message。</small></span>
+                            <div class="combo-grid two">
+                              <div class="combo" data-match="extended:0"><code>0</code> Control/Data Message。</div>
+                              <div class="combo" data-match="extended:1"><code>1</code> Extended Message，後面接 Extended Message Header + payload。</div>
+                            </div>
+                          </li>
+                          <li>
+                            <span class="node"><strong>bit14:12 NDO</strong><small>SOP' 也用 NDO 決定後面 data object 數量。</small></span>
+                            <div class="combo-grid">
+                              <div class="combo" data-match="ndo:000"><code>000</code> 0 objects：Control Message。</div>
+                              <div class="combo" data-match="ndo:001"><code>001</code> 1 object：常見 VDM Header-only request。</div>
+                              <div class="combo" data-match="ndo:010"><code>010</code> 2 objects：VDM Header + 1 VDO。</div>
+                              <div class="combo" data-match="ndo:011"><code>011</code> 3 objects。</div>
+                              <div class="combo" data-match="ndo:100"><code>100</code> 4 objects。</div>
+                              <div class="combo" data-match="ndo:101"><code>101</code> 5 objects。</div>
+                              <div class="combo" data-match="ndo:110"><code>110</code> 6 objects。</div>
+                              <div class="combo" data-match="ndo:111"><code>111</code> 7 objects。</div>
+                            </div>
+                          </li>
+                          <li>
+                            <span class="node"><strong>bit11:9 MessageID</strong><small>SOP' 有自己的 MessageID counter，不和 SOP 共用。</small></span>
+                            <div class="combo-grid">
+                              <div class="combo" data-match="mid:000"><code>000</code> SOP' MessageID 0。</div>
+                              <div class="combo" data-match="mid:001"><code>001</code> SOP' MessageID 1。</div>
+                              <div class="combo" data-match="mid:010"><code>010</code> SOP' MessageID 2。</div>
+                              <div class="combo" data-match="mid:011"><code>011</code> SOP' MessageID 3。</div>
+                              <div class="combo" data-match="mid:100"><code>100</code> SOP' MessageID 4。</div>
+                              <div class="combo" data-match="mid:101"><code>101</code> SOP' MessageID 5。</div>
+                              <div class="combo" data-match="mid:110"><code>110</code> SOP' MessageID 6。</div>
+                              <div class="combo" data-match="mid:111"><code>111</code> SOP' MessageID 7。</div>
+                            </div>
+                          </li>
+                          <li>
+                            <span class="node"><strong>bit8 Cable Plug</strong><small>SOP' / SOP'' 時 bit8 不代表 Source/Sink。</small></span>
+                            <div class="combo-grid two">
+                              <div class="combo" data-match="bit8:0"><code>0</code> Port，也就是 DFP/UFP 端送出的 cable message。</div>
+                              <div class="combo" data-match="bit8:1"><code>1</code> Cable Plug or VPD 送出的 cable message。</div>
+                            </div>
+                          </li>
+                          <li>
+                            <span class="node"><strong>bit7:6 Spec Revision</strong><small>SOP' 使用的 PD revision。Cable Plug 也要依 revision 解讀。</small></span>
+                            <div class="combo-grid">
+                              <div class="combo" data-match="spec:00"><code>00</code> Rev1.0 deprecated；receiver 視為 Rev2.0。</div>
+                              <div class="combo" data-match="spec:01"><code>01</code> Rev2.0。</div>
+                              <div class="combo" data-match="spec:10"><code>10</code> Rev3.x。</div>
+                              <div class="combo is-reserved" data-match="spec:11"><code>11</code> Reserved。</div>
+                            </div>
+                          </li>
+                          <li>
+                            <span class="node"><strong>bit5 Reserved</strong><small>SOP' / SOP'' 時 receiver ignores this field。</small></span>
+                            <div class="combo-grid two">
+                              <div class="combo" data-match="bit5:0"><code>0</code> Reserved：不要解讀為 UFP。</div>
+                              <div class="combo" data-match="bit5:1"><code>1</code> Reserved：不要解讀為 DFP。</div>
+                            </div>
+                          </li>
+                          <li>
+                            <span class="node is-decision"><strong>bit4:0 Message Type</strong><small>一樣先看 bit15 與 NDO，再查 Control / Data / Extended table。</small></span>
+                            <ul>
+                              <li>
+                                <span class="node is-end"><strong>Control</strong><small>SOP' -> Header -> Control Type -> CRC -> EOP。</small></span>
+                                <div class="combo-grid" data-message-table="control"></div>
+                              </li>
+                              <li>
+                                <span class="node is-end"><strong>Data</strong><small>SOP' -> Header -> Data Type -> 32-bit Data Object；常見 Vendor_Defined / VDM -> CRC -> EOP。</small></span>
+                                <div class="combo-grid" data-message-table="data"></div>
+                                <ul data-data-object-tree></ul>
+                              </li>
+                              <li>
+                                <span class="node is-end"><strong>Extended</strong><small>SOP' -> Header -> Extended Header + Payload -> CRC -> EOP。</small></span>
+                                <div class="combo-grid" data-message-table="extended"></div>
+                              </li>
+                            </ul>
+                          </li>
+                        </ul>
+                      </li>
+                    </ul>
+                  </li>
+
+                  <li>
+                    <span class="node"><strong>SOP''</strong><small>另一個 Cable Plug 視角；仍是 cable plug communication，不是一般 Port-to-Port。</small></span>
+                    <ul>
+                      <li>
+                        <span class="node is-decision"><strong>16-bit Header</strong><small>SOP'' 情境：bit8=Cable Plug，bit5=Reserved。</small></span>
+                        <ul>
+                          <li>
+                            <span class="node"><strong>bit15 Extended</strong><small>決定 SOP'' 這包是不是 Extended Message。</small></span>
+                            <div class="combo-grid two">
+                              <div class="combo" data-match="extended:0"><code>0</code> Control/Data Message。</div>
+                              <div class="combo" data-match="extended:1"><code>1</code> Extended Message，後面接 Extended Message Header + payload。</div>
+                            </div>
+                          </li>
+                          <li>
+                            <span class="node"><strong>bit14:12 NDO</strong><small>SOP'' 也用 NDO 決定後面 data object 數量。</small></span>
+                            <div class="combo-grid">
+                              <div class="combo" data-match="ndo:000"><code>000</code> 0 objects：Control Message。</div>
+                              <div class="combo" data-match="ndo:001"><code>001</code> 1 object。</div>
+                              <div class="combo" data-match="ndo:010"><code>010</code> 2 objects。</div>
+                              <div class="combo" data-match="ndo:011"><code>011</code> 3 objects。</div>
+                              <div class="combo" data-match="ndo:100"><code>100</code> 4 objects。</div>
+                              <div class="combo" data-match="ndo:101"><code>101</code> 5 objects。</div>
+                              <div class="combo" data-match="ndo:110"><code>110</code> 6 objects。</div>
+                              <div class="combo" data-match="ndo:111"><code>111</code> 7 objects。</div>
+                            </div>
+                          </li>
+                          <li>
+                            <span class="node"><strong>bit11:9 MessageID</strong><small>SOP'' 有自己的 MessageID counter，不和 SOP/SOP' 共用。</small></span>
+                            <div class="combo-grid">
+                              <div class="combo" data-match="mid:000"><code>000</code> SOP'' MessageID 0。</div>
+                              <div class="combo" data-match="mid:001"><code>001</code> SOP'' MessageID 1。</div>
+                              <div class="combo" data-match="mid:010"><code>010</code> SOP'' MessageID 2。</div>
+                              <div class="combo" data-match="mid:011"><code>011</code> SOP'' MessageID 3。</div>
+                              <div class="combo" data-match="mid:100"><code>100</code> SOP'' MessageID 4。</div>
+                              <div class="combo" data-match="mid:101"><code>101</code> SOP'' MessageID 5。</div>
+                              <div class="combo" data-match="mid:110"><code>110</code> SOP'' MessageID 6。</div>
+                              <div class="combo" data-match="mid:111"><code>111</code> SOP'' MessageID 7。</div>
+                            </div>
+                          </li>
+                          <li>
+                            <span class="node"><strong>bit8 Cable Plug</strong><small>SOP'' / SOP' 時 bit8 不代表 Source/Sink。</small></span>
+                            <div class="combo-grid two">
+                              <div class="combo" data-match="bit8:0"><code>0</code> Port，也就是 DFP/UFP 端送出的 cable message。</div>
+                              <div class="combo" data-match="bit8:1"><code>1</code> Cable Plug or VPD 送出的 cable message。</div>
+                            </div>
+                          </li>
+                          <li>
+                            <span class="node"><strong>bit7:6 Spec Revision</strong><small>SOP'' 使用的 PD revision。</small></span>
+                            <div class="combo-grid">
+                              <div class="combo" data-match="spec:00"><code>00</code> Rev1.0 deprecated；receiver 視為 Rev2.0。</div>
+                              <div class="combo" data-match="spec:01"><code>01</code> Rev2.0。</div>
+                              <div class="combo" data-match="spec:10"><code>10</code> Rev3.x。</div>
+                              <div class="combo is-reserved" data-match="spec:11"><code>11</code> Reserved。</div>
+                            </div>
+                          </li>
+                          <li>
+                            <span class="node"><strong>bit5 Reserved</strong><small>SOP'' / SOP' 時 receiver ignores this field。</small></span>
+                            <div class="combo-grid two">
+                              <div class="combo" data-match="bit5:0"><code>0</code> Reserved：不要解讀為 UFP。</div>
+                              <div class="combo" data-match="bit5:1"><code>1</code> Reserved：不要解讀為 DFP。</div>
+                            </div>
+                          </li>
+                          <li>
+                            <span class="node is-decision"><strong>bit4:0 Message Type</strong><small>一樣先看 bit15 與 NDO，再查 Control / Data / Extended table。</small></span>
+                            <ul>
+                              <li>
+                                <span class="node is-end"><strong>Control</strong><small>SOP'' -> Header -> Control Type -> CRC -> EOP。</small></span>
+                                <div class="combo-grid" data-message-table="control"></div>
+                              </li>
+                              <li>
+                                <span class="node is-end"><strong>Data</strong><small>SOP'' -> Header -> Data Type -> 32-bit Data Object；常見 cable / Vendor_Defined response -> CRC -> EOP。</small></span>
+                                <div class="combo-grid" data-message-table="data"></div>
+                                <ul data-data-object-tree></ul>
+                              </li>
+                              <li>
+                                <span class="node is-end"><strong>Extended</strong><small>SOP'' -> Header -> Extended Header + Payload -> CRC -> EOP。</small></span>
+                                <div class="combo-grid" data-message-table="extended"></div>
+                              </li>
+                            </ul>
+                          </li>
+                        </ul>
+                      </li>
+                    </ul>
+                  </li>
+                </ul>
+              </li>
+            </ul>
+          </div>
+
+
+        </div>
+      </details>
+    </section>
+
+
+    <p class="source">Base: USB_PD_R3.2_V1.2_2026_05_20.pdf, Chapter 6, Table 6.2 Message Header and Table 6.3 Number of Data Objects.</p>
+  </main>
+
+  <script>
+    const root = document.querySelector(".page");
+    const details = () => Array.from(root.querySelectorAll("details"));
+    const treeBranches = () => Array.from(root.querySelectorAll(".sketch-tree li.can-toggle"));
+    const headerInput = document.querySelector("#headerInput");
+    const objectInput = document.querySelector("#objectInput");
+    const objectInputLabel = document.querySelector("#objectInputLabel");
+    const dataStatus = document.querySelector("#dataStatus");
+    const decodeResult = document.querySelector("#decodeResult");
+
+    const controlTypes = {
+      1: "GoodCRC",
+      2: "GotoMin, deprecated",
+      3: "Accept",
+      4: "Reject",
+      5: "Ping, deprecated",
+      6: "PS_RDY",
+      7: "Get_Source_Cap",
+      8: "Get_Sink_Cap",
+      9: "DR_Swap",
+      10: "PR_Swap",
+      11: "VCONN_Swap",
+      12: "Wait",
+      13: "Soft_Reset",
+      14: "Data_Reset",
+      15: "Data_Reset_Complete",
+      16: "Not_Supported",
+      17: "Get_Source_Cap_Extended",
+      18: "Get_Status",
+      19: "FR_Swap"
+    };
+
+    const dataTypes = {
+      1: "Source_Capabilities, 後面通常是 Source PDO list",
+      2: "Request, 後面通常是一個 RDO",
+      3: "BIST",
+      4: "Sink_Capabilities, 後面通常是 Sink PDO list",
+      5: "Battery_Status",
+      6: "Alert",
+      7: "Get_Country_Info",
+      8: "Enter_USB",
+      9: "EPR_Request",
+      10: "EPR_Mode",
+      11: "Source_Info",
+      12: "Revision",
+      15: "Vendor_Defined, 後面通常是 VDM"
+    };
+
+    const specText = {
+      0: "00 / Rev1.0 deprecated, receiver 依 R3.2 應視為 Rev2.0",
+      1: "01 / Rev2.0",
+      2: "10 / Rev3.x",
+      3: "11 / Reserved"
+    };
+
+    const messageTableDefinitions = {
+      control: [
+        ["00000", "Reserved", "保留碼，不代表有效功能；receiver 通常回 Not_Supported 或忽略。", true],
+        ["00001", "GoodCRC", "接收端確認上一包 PD message 的 CRC 正確，等於 link-layer ACK。"],
+        ["00010", "GotoMin deprecated", "舊版要求 Source 降到最低供電能力；新規格已不建議使用。"],
+        ["00011", "Accept", "同意對方要求，例如 Request、Swap、Data_Reset 等命令。"],
+        ["00100", "Reject", "拒絕對方要求；通常代表目前條件不允許或不支援。"],
+        ["00101", "Ping deprecated", "舊版 keep-alive 類訊息；PD 3.x 實務上不再使用。"],
+        ["00110", "PS_RDY", "Power Supply Ready；Source 表示新電源合約或切換已準備好。"],
+        ["00111", "Get_Source_Cap", "要求對方送出 Source_Capabilities，列出可供電 PDO。"],
+        ["01000", "Get_Sink_Cap", "要求對方送出 Sink_Capabilities，列出可吃電 PDO。"],
+        ["01001", "DR_Swap", "Data Role Swap；要求 DFP/UFP 資料角色互換。"],
+        ["01010", "PR_Swap", "Power Role Swap；要求 Source/Sink 供電角色互換。"],
+        ["01011", "VCONN_Swap", "要求 VCONN 供電責任互換，常跟有源線材或 e-marker 有關。"],
+        ["01100", "Wait", "暫時不能處理要求，但不是永久拒絕；對方稍後可再試。"],
+        ["01101", "Soft_Reset", "重置 PD protocol layer 狀態，不代表 USB 實體斷線。"],
+        ["01110", "Data_Reset", "重置 USB data path 相關狀態，常用於資料通道重新初始化。"],
+        ["01111", "Data_Reset_Complete", "回報 Data_Reset 流程完成。"],
+        ["10000", "Not_Supported", "明確表示不支援收到的 message 或目前無法解析。"],
+        ["10001", "Get_Source_Cap_Extended", "要求 Source_Capabilities_Extended extended message。"],
+        ["10010", "Get_Status", "要求對方回報狀態，例如電源、溫度、錯誤或 battery 相關狀態。"],
+        ["10011", "FR_Swap", "Fast Role Swap；要求快速從 Sink 轉 Source，以維持供電不中斷。"],
+        ["10100", "Get_PPS_Status", "要求 PPS 狀態，包含目前 PPS output 與限制狀態。"],
+        ["10101", "Get_Country_Codes", "要求對方列出支援的 country code 清單。"],
+        ["10110", "Get_Sink_Cap_Extended", "要求 Sink_Capabilities_Extended extended message。"],
+        ["10111", "Get_Source_Info", "要求 Source_Info data message，取得 Source 補充資訊。"],
+        ["11000", "Get_Revision", "要求對方回報支援的 USB PD revision 資訊。"],
+        ["11001", "Reserved", "保留碼，不可當作已定義功能使用。", true],
+        ["11010", "Reserved", "保留碼，不可當作已定義功能使用。", true],
+        ["11011", "Reserved", "保留碼，不可當作已定義功能使用。", true],
+        ["11100", "Reserved", "保留碼，不可當作已定義功能使用。", true],
+        ["11101", "Reserved", "保留碼，不可當作已定義功能使用。", true],
+        ["11110", "Reserved", "保留碼，不可當作已定義功能使用。", true],
+        ["11111", "Reserved", "保留碼，不可當作已定義功能使用。", true]
+      ],
+      data: [
+        ["00000", "Reserved", "保留碼；Data Message 不應使用。", true],
+        ["00001", "Source_Capabilities", "Source 公告可供電能力；後面是 1~7 個 Source PDO。"],
+        ["00010", "Request", "Sink 選擇一個 Source PDO 並提出需求；後面通常是 1 個 RDO。"],
+        ["00011", "BIST", "測試用 message；後面是 BIST Data Object, BDO。"],
+        ["00100", "Sink_Capabilities", "Sink 公告自己的吃電能力；後面是 1~7 個 Sink PDO。"],
+        ["00101", "Battery_Status", "回報 battery present、capacity、charging status；後面是 BSDO。"],
+        ["00110", "Alert", "通知狀態變化或保護事件；後面是 Alert Data Object, ADO。"],
+        ["00111", "Get_Country_Info", "查詢特定國家/地區資訊；後面帶 Country Code Data Object。"],
+        ["01000", "Enter_USB", "要求或宣告進入 USB4 / USB mode 相關流程。"],
+        ["01001", "EPR_Request", "EPR 模式下的 Request；後面是 EPR RDO。"],
+        ["01010", "EPR_Mode", "進入、確認或離開 Extended Power Range mode。"],
+        ["01011", "Source_Info", "Source 補充資訊，例如目前能力或狀態描述。"],
+        ["01100", "Revision", "回報支援的 PD revision / spec revision 資訊。"],
+        ["01101", "Reserved", "保留碼，不可當作已定義 Data Message 使用。", true],
+        ["01110", "Reserved", "保留碼，不可當作已定義 Data Message 使用。", true],
+        ["01111", "Vendor_Defined", "Vendor Defined Message；第一個 object 是 VDM Header，後面可接 VDO。"],
+        ["10000", "Reserved", "保留碼，不可當作已定義 Data Message 使用。", true],
+        ["10001", "Reserved", "保留碼，不可當作已定義 Data Message 使用。", true],
+        ["10010", "Reserved", "保留碼，不可當作已定義 Data Message 使用。", true],
+        ["10011", "Reserved", "保留碼，不可當作已定義 Data Message 使用。", true],
+        ["10100", "Reserved", "保留碼，不可當作已定義 Data Message 使用。", true],
+        ["10101", "Reserved", "保留碼，不可當作已定義 Data Message 使用。", true],
+        ["10110", "Reserved", "保留碼，不可當作已定義 Data Message 使用。", true],
+        ["10111", "Reserved", "保留碼，不可當作已定義 Data Message 使用。", true],
+        ["11000", "Reserved", "保留碼，不可當作已定義 Data Message 使用。", true],
+        ["11001", "Reserved", "保留碼，不可當作已定義 Data Message 使用。", true],
+        ["11010", "Reserved", "保留碼，不可當作已定義 Data Message 使用。", true],
+        ["11011", "Reserved", "保留碼，不可當作已定義 Data Message 使用。", true],
+        ["11100", "Reserved", "保留碼，不可當作已定義 Data Message 使用。", true],
+        ["11101", "Reserved", "保留碼，不可當作已定義 Data Message 使用。", true],
+        ["11110", "Reserved", "保留碼，不可當作已定義 Data Message 使用。", true],
+        ["11111", "Reserved", "保留碼，不可當作已定義 Data Message 使用。", true]
+      ],
+      extended: [
+        ["00000", "Reserved", "保留碼；Extended Message 不應使用。", true],
+        ["00001", "Source_Capabilities_Extended", "Source 的延伸能力資訊，不是一般 PDO list。"],
+        ["00010", "Status", "回報裝置狀態，例如 internal temperature、power state、event flags。"],
+        ["00011", "Get_Battery_Cap", "要求指定 battery 的能力資料。"],
+        ["00100", "Get_Battery_Status", "要求指定 battery 的即時狀態。"],
+        ["00101", "Battery_Capabilities", "回覆 battery 設計容量、充電能力等資訊。"],
+        ["00110", "Get_Manufacturer_Info", "要求製造商資訊。"],
+        ["00111", "Manufacturer_Info", "回覆 manufacturer string 或 vendor/product 資訊。"],
+        ["01000", "Security_Request", "USB PD security protocol request。"],
+        ["01001", "Security_Response", "USB PD security protocol response。"],
+        ["01010", "Firmware_Update_Request", "韌體更新流程 request。"],
+        ["01011", "Firmware_Update_Response", "韌體更新流程 response。"],
+        ["01100", "PPS_Status", "回報 PPS output voltage/current 與限制狀態。"],
+        ["01101", "Country_Info", "回覆 country-specific information。"],
+        ["01110", "Country_Codes", "回覆支援的 country code 清單。"],
+        ["01111", "Sink_Capabilities_Extended", "Sink 的延伸能力資訊。"],
+        ["10000", "Extended_Control", "Extended message 裡的控制型命令集合。"],
+        ["10001", "EPR_Source_Capabilities", "EPR Source 公告高功率能力。"],
+        ["10010", "EPR_Sink_Capabilities", "EPR Sink 公告高功率需求能力。"],
+        ["10011", "Reserved", "保留碼，不可當作已定義 Extended Message 使用。", true],
+        ["10100", "Reserved", "保留碼，不可當作已定義 Extended Message 使用。", true],
+        ["10101", "Reserved", "保留碼，不可當作已定義 Extended Message 使用。", true],
+        ["10110", "Reserved", "保留碼，不可當作已定義 Extended Message 使用。", true],
+        ["10111", "Reserved", "保留碼，不可當作已定義 Extended Message 使用。", true],
+        ["11000", "Reserved", "保留碼，不可當作已定義 Extended Message 使用。", true],
+        ["11001", "Reserved", "保留碼，不可當作已定義 Extended Message 使用。", true],
+        ["11010", "Reserved", "保留碼，不可當作已定義 Extended Message 使用。", true],
+        ["11011", "Reserved", "保留碼，不可當作已定義 Extended Message 使用。", true],
+        ["11100", "Reserved", "保留碼，不可當作已定義 Extended Message 使用。", true],
+        ["11101", "Reserved", "保留碼，不可當作已定義 Extended Message 使用。", true],
+        ["11110", "Vendor_Defined_Extended", "Vendor-defined extended payload，可放較長 vendor 資料。"],
+        ["11111", "Reserved", "保留碼，不可當作已定義 Extended Message 使用。", true]
+      ]
+    };
+
+    const openIds = (...ids) => {
+      ids.forEach((id) => {
+        const element = document.querySelector(`#${id}`);
+        if (element) element.open = true;
+      });
+    };
+
+    const clearHighlights = () => {
+      root.querySelectorAll(".is-hit, .is-match").forEach((element) => {
+        element.classList.remove("is-hit", "is-match");
+      });
+    };
+
+    const markField = (field) => {
+      root.querySelectorAll(`[data-field="${field}"]`).forEach((element) => {
+        element.classList.add("is-hit");
+      });
+    };
+
+    const markMatch = (key) => {
+      root.querySelectorAll(`[data-match="${key}"]`).forEach((element) => {
+        element.classList.add("is-match");
+      });
+    };
+
+    const renderMessageTypeMatrices = () => {
+      root.querySelectorAll("[data-message-table]").forEach((target) => {
+        const tableName = target.dataset.messageTable;
+        const prefix = tableName === "extended" ? "ext-msg" : `${tableName}-msg`;
+        const rows = messageTableDefinitions[tableName] || [];
+        target.innerHTML = rows.map(([bits, label, description, reserved]) => {
+          const isReserved = reserved || description === true;
+          const term = description && description !== true ? `<span class="term">${description}</span>` : "";
+          const className = isReserved ? "combo is-reserved" : "combo";
+          return `<div class="${className}" data-match="${prefix}:${bits}"><code>${bits}</code> ${label}${term}</div>`;
+        }).join("");
+      });
+    };
+
+    const dataObjectTreeTemplate = () => `
+      <li>
+        <span class="node is-decision"><strong>32-bit Data Object</strong><small>Data Message 才會有；Header 的 NDO=001~111 代表後面有 1~7 個 32-bit object，每個 object 都用 little-endian bytes 傳輸。</small></span>
+        <ul>
+          <li data-match="data-object:pdo">
+            <span class="node is-decision"><strong>PDO: Source_Capabilities / Sink_Capabilities</strong><small>Message Type=<code>00001</code> 或 <code>00100</code> 時使用；每個 32-bit object 是一個 Power Data Object。</small></span>
+            <ul>
+              <li>
+                <span class="node is-decision"><strong>PDO Type bit31:30</strong><small>先看最高 2 bits，決定整顆 32-bit PDO 要用哪一種格式拆。</small></span>
+                <div class="combo-grid">
+                  <div class="combo"><code>00</code> Fixed Supply PDO：固定電壓能力，例如 5V、9V、15V、20V。</div>
+                  <div class="combo"><code>01</code> Battery Supply PDO：用功率 W 表示能力，適合像電池供電這類 power-limited source/sink。</div>
+                  <div class="combo"><code>10</code> Variable Supply PDO：可變電壓範圍，但不是 PPS/APDO。</div>
+                  <div class="combo"><code>11</code> Augmented PDO：再看 bit29:28，常見是 PPS APDO 或 AVS APDO。</div>
+                </div>
+              </li>
+              <li>
+                <span class="node"><strong>Fixed Supply PDO bit map</strong><small><code>bit31:30=00</code>。電壓由 bit19:10 表示，電流由 bit9:0 表示。</small></span>
+                <div class="combo-grid">
+                  <div class="combo"><code>bit31:30</code> PDO Type=<code>00</code> Fixed Supply。</div>
+                  <div class="combo"><code>bit29</code> Dual-Role Power：1=此 port 可做 Source/Sink power role swap。</div>
+                  <div class="combo"><code>bit28</code> Source 5V PDO 是 USB Suspend Supported；Sink 5V PDO 是 Higher Capability。</div>
+                  <div class="combo"><code>bit27</code> Unconstrained Power：1=不受內部電池或有限電源限制。</div>
+                  <div class="combo"><code>bit26</code> USB Communications Capable：1=USB data path 可通訊。</div>
+                  <div class="combo"><code>bit25</code> Dual-Role Data：1=可做 DFP/UFP data role swap。</div>
+                  <div class="combo"><code>bit24</code> Source 5V PDO 是 Unchunked Extended Messages Supported；Sink 5V PDO 與 bit23 合成 FRS current。</div>
+                  <div class="combo"><code>bit23</code> Source 5V PDO 是 EPR Mode Capable；Sink 5V PDO 與 bit24 合成 FRS required current。</div>
+                  <div class="combo"><code>bit22</code> 多數 Fixed PDO 為 Reserved 或依 5V 第一個 PDO 情境解讀。</div>
+                  <div class="combo"><code>bit21:20</code> Peak Current：00=不支援尖峰額外能力；01/10/11 表示可承受較高短時間尖峰電流。</div>
+                  <div class="combo"><code>bit19:10</code> Voltage，單位 50mV；raw=100 代表 5.00V。</div>
+                  <div class="combo"><code>bit9:0</code> Maximum Current，單位 10mA；raw=300 代表 3.00A。</div>
+                </div>
+              </li>
+              <li>
+                <span class="node"><strong>Battery Supply PDO bit map</strong><small><code>bit31:30=01</code>。下方欄位用電壓範圍 + 最大功率，不用電流欄位。</small></span>
+                <div class="combo-grid">
+                  <div class="combo"><code>bit31:30</code> PDO Type=<code>01</code> Battery。</div>
+                  <div class="combo"><code>bit29:20</code> Maximum Voltage，單位 50mV。</div>
+                  <div class="combo"><code>bit19:10</code> Minimum Voltage，單位 50mV。</div>
+                  <div class="combo"><code>bit9:0</code> Maximum Allowable Power，單位 250mW。</div>
+                </div>
+              </li>
+              <li>
+                <span class="node"><strong>Variable Supply PDO bit map</strong><small><code>bit31:30=10</code>。下方欄位用電壓範圍 + 最大電流。</small></span>
+                <div class="combo-grid">
+                  <div class="combo"><code>bit31:30</code> PDO Type=<code>10</code> Variable Supply。</div>
+                  <div class="combo"><code>bit29:20</code> Maximum Voltage，單位 50mV。</div>
+                  <div class="combo"><code>bit19:10</code> Minimum Voltage，單位 50mV。</div>
+                  <div class="combo"><code>bit9:0</code> Maximum Current，單位 10mA。</div>
+                </div>
+              </li>
+              <li>
+                <span class="node"><strong>PPS APDO bit map</strong><small><code>bit31:30=11</code> 且 <code>bit29:28=00</code>。可程式調整電壓與限流。</small></span>
+                <div class="combo-grid">
+                  <div class="combo"><code>bit31:30</code> PDO Type=<code>11</code> Augmented PDO。</div>
+                  <div class="combo"><code>bit29:28</code> APDO Type=<code>00</code> SPR PPS。</div>
+                  <div class="combo"><code>bit27</code> Source PPS Power Limited；表示 PPS power 可能受限。</div>
+                  <div class="combo"><code>bit24:17</code> Maximum Voltage，單位 100mV。</div>
+                  <div class="combo"><code>bit15:8</code> Minimum Voltage，單位 100mV。</div>
+                  <div class="combo"><code>bit6:0</code> Maximum Current，單位 50mA。</div>
+                  <div class="combo"><code>其它 bits</code> Reserved，接收端通常 ignore。</div>
+                </div>
+              </li>
+              <li><span class="node is-end"><strong>PDO 結尾</strong><small>若 NDO 還有下一個 object，就再拆下一個 32-bit PDO；全部拆完後 CRC -> EOP。</small></span></li>
+            </ul>
+          </li>
+
+          <li data-match="data-object:rdo">
+            <span class="node is-decision"><strong>RDO: Request / EPR_Request</strong><small>Message Type=<code>00010</code> 或 <code>01001</code> 時使用；Sink 用 RDO 指向 Source_Capabilities 中某一個 PDO。</small></span>
+            <ul>
+              <li>
+                <span class="node"><strong>Fixed / Variable Request RDO</strong><small>沒有電壓選擇欄位；電壓由 bit31:28 Object Position 指到的 Source PDO 決定。</small></span>
+                <div class="combo-grid">
+                  <div class="combo"><code>bit31:28</code> Object Position：1=選 Source_Capabilities 第 1 個 PDO，2=第 2 個 PDO。</div>
+                  <div class="combo"><code>bit27</code> GiveBack deprecated；新系統通常不使用。</div>
+                  <div class="combo"><code>bit26</code> Capability Mismatch：1=Sink 接受可用能力，但它真正想要的能力沒有被滿足。</div>
+                  <div class="combo"><code>bit25</code> USB Communications Capable。</div>
+                  <div class="combo"><code>bit24</code> No USB Suspend：1=要求不要因 USB suspend 而降低供電。</div>
+                  <div class="combo"><code>bit23</code> Unchunked Extended Messages Supported。</div>
+                  <div class="combo"><code>bit22</code> EPR Mode Capable。</div>
+                  <div class="combo"><code>bit19:10</code> Operating Current，單位 10mA。</div>
+                  <div class="combo"><code>bit9:0</code> Maximum Operating Current deprecated，通常設成等於 Operating Current。</div>
+                </div>
+              </li>
+              <li>
+                <span class="node"><strong>Battery Request RDO</strong><small>要求 Battery PDO；用功率欄位，不用電流欄位。</small></span>
+                <div class="combo-grid">
+                  <div class="combo"><code>bit31:28</code> Object Position。</div>
+                  <div class="combo"><code>bit26</code> Capability Mismatch。</div>
+                  <div class="combo"><code>bit25</code> USB Communications Capable。</div>
+                  <div class="combo"><code>bit24</code> No USB Suspend。</div>
+                  <div class="combo"><code>bit23</code> Unchunked Extended Messages Supported。</div>
+                  <div class="combo"><code>bit22</code> EPR Mode Capable。</div>
+                  <div class="combo"><code>bit19:10</code> Operating Power，單位 250mW。</div>
+                  <div class="combo"><code>bit9:0</code> Maximum Operating Power deprecated，通常設成等於 Operating Power。</div>
+                </div>
+              </li>
+              <li>
+                <span class="node"><strong>PPS Request RDO</strong><small>要求 PPS APDO；這裡才會直接填想要的輸出電壓。</small></span>
+                <div class="combo-grid">
+                  <div class="combo"><code>bit31:28</code> Object Position，指向 PPS APDO。</div>
+                  <div class="combo"><code>bit20:9</code> Output Voltage，單位 20mV，必須落在 APDO min/max voltage。</div>
+                  <div class="combo"><code>bit6:0</code> Operating Current，單位 50mA。</div>
+                  <div class="combo"><code>bit27/26/25/24/23/22</code> 與一般 RDO 類似：GiveBack、Mismatch、USB comm、No suspend、Unchunked、EPR capable。</div>
+                </div>
+              </li>
+              <li><span class="node is-end"><strong>RDO 結尾</strong><small>Source 收到後用 Accept / Reject / Wait 回應；若 Accept，後面通常接 PS_RDY。這包本身最後仍是 CRC -> EOP。</small></span></li>
+            </ul>
+          </li>
+
+          <li data-match="data-object:vdm">
+            <span class="node is-decision"><strong>VDM: Vendor_Defined</strong><small>Message Type=<code>01111</code>；第一個 32-bit Data Object 是 VDM Header。</small></span>
+            <ul>
+              <li>
+                <span class="node"><strong>VDM Header bit map</strong><small>先拆 SVID，再拆 Structured/Unstructured、Command Type 與 Command。</small></span>
+                <div class="combo-grid">
+                  <div class="combo"><code>bit31:16</code> SVID：USB-IF 指派的 Standard/Vendor ID；例如 <code>FF00h</code> 是常見 vendor range。</div>
+                  <div class="combo"><code>bit15</code> VDM Type：0=Unstructured VDM，1=Structured VDM。</div>
+                  <div class="combo"><code>bit14:13</code> Structured VDM Version。</div>
+                  <div class="combo"><code>bit12:11</code> Object Position；部分 command 會用來指定 mode index。</div>
+                  <div class="combo"><code>bit7:6</code> Command Type：00=REQ，01=ACK，10=NAK，11=BUSY。</div>
+                  <div class="combo"><code>bit4:0</code> Command：00001=Discover Identity，00010=Discover SVIDs，00011=Discover Modes。</div>
+                </div>
+              </li>
+              <li>
+                <span class="node"><strong>後續 VDO</strong><small>ACK 回覆常會接 1~6 個 Vendor Defined Object，內容依 command 不同。</small></span>
+                <div class="combo-grid">
+                  <div class="combo"><code>Discover Identity ACK</code> 常接 ID Header VDO、Cert Stat VDO、Product VDO、Cable/Product Type VDO。</div>
+                  <div class="combo"><code>Discover SVIDs ACK</code> 列出支援的 SVID pair。</div>
+                  <div class="combo"><code>Discover Modes ACK</code> 列出指定 SVID 下支援的 mode VDO。</div>
+                  <div class="combo"><code>REQ / NAK / BUSY</code> 可能只有 VDM Header，也可能依命令帶少量 VDO。</div>
+                </div>
+              </li>
+              <li><span class="node is-end"><strong>VDM 結尾</strong><small>VDM Header + optional VDO 全部結束後，仍走 CRC -> EOP。</small></span></li>
+            </ul>
+          </li>
+
+          <li data-match="data-object:other">
+            <span class="node is-decision"><strong>Other Data Objects</strong><small>BIST、Battery_Status、Alert、Get_Country_Info、Enter_USB、EPR_Mode、Source_Info、Revision 等各有對應 32-bit object。</small></span>
+            <ul>
+              <li>
+                <span class="node"><strong>BDO: BIST Data Object</strong><small>Message Type=BIST；用於 PHY compliance/test。</small></span>
+                <div class="combo-grid">
+                  <div class="combo"><code>bit31:28</code> BIST Test Mode。</div>
+                  <div class="combo"><code>0101</code> BIST Carrier Mode。</div>
+                  <div class="combo"><code>1000</code> BIST Test Data。</div>
+                  <div class="combo"><code>1001</code> Shared Test Mode Entry。</div>
+                  <div class="combo"><code>1010</code> Shared Test Mode Exit。</div>
+                  <div class="combo"><code>bit27:0</code> Reserved，receiver ignore。</div>
+                </div>
+              </li>
+              <li>
+                <span class="node"><strong>BSDO: Battery Status Data Object</strong><small>Message Type=Battery_Status；回報 battery present/capacity/status。</small></span>
+                <div class="combo-grid">
+                  <div class="combo"><code>bit31:16</code> Battery Present Capacity，0.1Wh 單位；<code>FFFFh</code>=unknown。</div>
+                  <div class="combo"><code>bit11:10</code> Charging Status：00=Charging，01=Discharging，10=Idle，11=Invalid。</div>
+                  <div class="combo"><code>bit9</code> Battery Present：0=not present，1=present。</div>
+                  <div class="combo"><code>bit8</code> Invalid Battery Reference：1=要求的 battery reference/slot 不存在。</div>
+                  <div class="combo"><code>其它 bits</code> Reserved。</div>
+                </div>
+              </li>
+              <li>
+                <span class="node"><strong>ADO: Alert Data Object</strong><small>Message Type=Alert；通知 Source/Sink 發生狀態變化。</small></span>
+                <div class="combo-grid">
+                  <div class="combo"><code>bit31</code> Extended Alert Event。</div>
+                  <div class="combo"><code>bit30</code> OVP Event，過壓保護事件。</div>
+                  <div class="combo"><code>bit29</code> Source Input Change Event。</div>
+                  <div class="combo"><code>bit28</code> Operating Condition Change。</div>
+                  <div class="combo"><code>bit27</code> OTP Event，過溫關斷。</div>
+                  <div class="combo"><code>bit26</code> OCP Event，過流事件。</div>
+                  <div class="combo"><code>bit25</code> Battery Status Change Event。</div>
+                  <div class="combo"><code>bit23:20</code> Fixed Batteries event bitmap。</div>
+                  <div class="combo"><code>bit19:16</code> Hot Swappable Batteries event bitmap。</div>
+                  <div class="combo"><code>bit3:0</code> Extended Alert Event Type。</div>
+                </div>
+              </li>
+              <li><span class="node is-end"><strong>Other Data Object 結尾</strong><small>依 Message Type 拆完對應 object 後，封包最後仍是 CRC -> EOP。</small></span></li>
+            </ul>
+          </li>
+          <li><span class="node is-end"><strong>Data Message 結尾</strong><small>Data Type table 選定格式 -> 解析 1~7 個 32-bit Data Object -> CRC -> EOP。</small></span></li>
+        </ul>
+      </li>
+    `;
+
+    const renderDataObjectTrees = () => {
+      root.querySelectorAll("[data-data-object-tree]").forEach((target) => {
+        target.innerHTML = dataObjectTreeTemplate();
+      });
+    };
+
+    const setBranchExpanded = (branch, expanded) => {
+      branch.classList.toggle("is-collapsed", !expanded);
+      const node = branch.querySelector(":scope > .node");
+      if (node) node.setAttribute("aria-expanded", String(expanded));
+    };
+
+    const initializeTreeToggles = () => {
+      root.querySelectorAll(".sketch-tree li").forEach((branch) => {
+        const node = branch.querySelector(":scope > .node");
+        const hasChildren = branch.querySelector(":scope > ul, :scope > .combo-grid");
+        if (!node || !hasChildren) return;
+
+        branch.classList.add("can-toggle");
+        node.setAttribute("role", "button");
+        node.setAttribute("tabindex", "0");
+        node.setAttribute("aria-expanded", "true");
+        node.setAttribute("title", "點選展開 / 收合這個分支");
+
+        node.addEventListener("click", () => {
+          setBranchExpanded(branch, branch.classList.contains("is-collapsed"));
+        });
+
+        node.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          setBranchExpanded(branch, branch.classList.contains("is-collapsed"));
+        });
+      });
+    };
+
+    const parseHexBytes = (value) => {
+      const cleaned = value.replace(/0x/gi, "").replace(/[^0-9a-f]/gi, "");
+      if (cleaned.length === 0) return [];
+      if (cleaned.length % 2 !== 0) return null;
+      const bytes = [];
+      for (let index = 0; index < cleaned.length; index += 2) {
+        bytes.push(parseInt(cleaned.slice(index, index + 2), 16));
+      }
+      return bytes;
+    };
+
+    const parseHeaderBytes = (value) => {
+      const trimmed = value.trim();
+      const canonical = trimmed.replace(/0x/gi, "").replace(/[^0-9a-f]/gi, "");
+      if (/^0x/i.test(trimmed) && canonical.length === 4) {
+        const headerValue = parseInt(canonical, 16);
+        return [headerValue & 0xff, (headerValue >> 8) & 0xff];
+      }
+      const bytes = parseHexBytes(value);
+      if (bytes === null) return null;
+      if (bytes.length === 2) return bytes;
+      if (bytes.length === 0) return [];
+      if (bytes.length === 1) return bytes;
+      return bytes.slice(0, 2);
+    };
+
+    const bin = (value, width) => value.toString(2).padStart(width, "0");
+    const hex = (value, width) => `0x${value.toString(16).toUpperCase().padStart(width, "0")}`;
+
+    const classifyMessage = (extended, ndo, type) => {
+      if (extended === 1) return ["Extended Message", "依 Extended Message Type table 解讀"];
+      if (ndo > 0) return ["Data Message", dataTypes[type] || "Data Message type 尚未列在此快速表"];
+      return ["Control Message", controlTypes[type] || "Control Message type 尚未列在此快速表"];
+    };
+
+    const dataObjectBranch = (type) => {
+      if (type === 1 || type === 4) return "pdo";
+      if (type === 2 || type === 9) return "rdo";
+      if (type === 15) return "vdm";
+      if ([3, 5, 6, 7, 8, 10, 11, 12].includes(type)) return "other";
+      return "";
+    };
+
+    const renderBits = ({ extended, ndo, messageId, bit8, spec, bit5, messageType }) => {
+      const groups = [
+        ["15", bin(extended, 1)],
+        ["14:12", bin(ndo, 3)],
+        ["11:9", bin(messageId, 3)],
+        ["8", bin(bit8, 1)],
+        ["7:6", bin(spec, 2)],
+        ["5", bin(bit5, 1)],
+        ["4:0", bin(messageType, 5)]
+      ];
+
+      return groups.map(([label, value]) => {
+        return `<span class="bit-group is-hit">${label}: ${value}</span>`;
+      }).join("");
+    };
+
+    const decodePacket = () => {
+      clearHighlights();
+      const headerBytes = parseHeaderBytes(headerInput.value);
+      const objectBytes = parseHexBytes(objectInput.value);
+
+      if (!headerInput.value.trim()) {
+        decodeResult.classList.remove("show");
+        decodeResult.innerHTML = "";
+        objectInput.disabled = true;
+        objectInputLabel.classList.add("is-disabled");
+        dataStatus.textContent = "請先輸入第一行 Header，系統會判斷是否需要第二行。";
+        return;
+      }
+
+      if (headerBytes === null || objectBytes === null) {
+        decodeResult.classList.add("show");
+        decodeResult.innerHTML = "<strong>格式提醒：</strong>Hex 數字需要成對，例如 A1 11，不要只輸入單半 byte。";
+        return;
+      }
+
+      if (headerBytes.length < 2) {
+        decodeResult.classList.add("show");
+        decodeResult.innerHTML = "<strong>還不能解析：</strong>至少需要 2 bytes，才能組成 16-bit Message Header。";
+        objectInput.disabled = true;
+        objectInputLabel.classList.add("is-disabled");
+        dataStatus.textContent = "第一行 Header 還不完整，所以第二行先不啟用。";
+        return;
+      }
+
+      const header = headerBytes[0] | (headerBytes[1] << 8);
+      const extended = (header >> 15) & 0x1;
+      const ndo = (header >> 12) & 0x7;
+      const messageId = (header >> 9) & 0x7;
+      const bit8 = (header >> 8) & 0x1;
+      const spec = (header >> 6) & 0x3;
+      const bit5 = (header >> 5) & 0x1;
+      const messageType = header & 0x1f;
+      const messageTypeBits = bin(messageType, 5);
+      const [messageClass, messageName] = classifyMessage(extended, ndo, messageType);
+      const dataBytes = objectBytes.length;
+      const completeObjects = Math.floor(dataBytes / 4);
+      const needsSecondLine = extended === 1 || ndo > 0;
+      let objectHint = "Header 宣告 NDO=0，這包一般是沒有 Data Object 的 Control Message。";
+
+      objectInput.disabled = !needsSecondLine;
+      objectInputLabel.classList.toggle("is-disabled", !needsSecondLine);
+
+      if (extended === 1) {
+        dataStatus.textContent = "Header 顯示 Extended=1：第二行需要填 Extended Message Header + payload。";
+        objectHint = `Extended Message：第二行應從 16-bit Extended Message Header 開始。目前輸入 ${dataBytes} bytes。`;
+      } else if (ndo > 0) {
+        const expectedBytes = ndo * 4;
+        const byteStatus = dataBytes === expectedBytes
+          ? "數量剛好符合 Header 宣告。"
+          : `建議填 ${expectedBytes} bytes，目前填 ${dataBytes} bytes。`;
+        dataStatus.textContent = `Header 顯示 NDO=${ndo}：需要第二行 Data Object。${byteStatus}`;
+        objectHint = `Header 宣告 NDO=${ndo}，代表第二行應有 ${ndo} 個 32-bit Data Object，共 ${expectedBytes} bytes。目前可切出 ${completeObjects} 個完整 object。`;
+      } else {
+        dataStatus.textContent = "Header 顯示 Extended=0 且 NDO=0：這是 Control Message，不需要第二行 Data Object。";
+      }
+
+      markField("extended");
+      markField("ndo");
+      markField("message-id");
+      markField("bit8");
+      markField("spec-rev");
+      markField("bit5");
+      markField("message-type");
+      markMatch(`extended:${extended}`);
+      markMatch(`ndo:${bin(ndo, 3)}`);
+      markMatch(`mid:${bin(messageId, 3)}`);
+      markMatch(`spec:${bin(spec, 2)}`);
+      markMatch(`msg:${messageTypeBits}`);
+      if (extended === 1) {
+        markMatch(`ext-msg:${messageTypeBits}`);
+      } else if (ndo > 0) {
+        markMatch(`data-msg:${messageTypeBits}`);
+        const branch = dataObjectBranch(messageType);
+        if (branch) {
+          markMatch(`data-object:${branch}`);
+        }
+      } else {
+        markMatch(`control-msg:${messageTypeBits}`);
+      }
+      if (extended === 0) {
+        markMatch("ndo-rule:normal");
+      }
+      markMatch(`bit8:${bit8}`);
+      markMatch(`bit5:${bit5}`);
+
+      root.querySelector('[data-packet-field="header"]')?.classList.add("is-hit");
+      if (needsSecondLine || dataBytes > 0) {
+        root.querySelector('[data-packet-field="objects"]')?.classList.add("is-hit");
+      }
+
+      openIds(
+        "whiteboard-tree",
+        "packet-script",
+        "packet-structure",
+        "header-bitmap",
+        "header-fields",
+        "field-extended",
+        "field-ndo",
+        "field-message-id",
+        "field-bit8",
+        "field-spec-rev",
+        "field-bit5",
+        "field-message-type",
+        "parse-order"
+      );
+
+      decodeResult.classList.add("show");
+      decodeResult.innerHTML = `
+        <div><strong>第一行 Header:</strong> ${headerBytes.map((byte) => bin(byte, 8)).join(" ")} wire bytes = ${hex(header, 4)} little-endian。</div>
+        <div><strong>分類:</strong> ${messageClass}；Message Type = ${messageTypeBits} / ${messageName}。</div>
+        <div><strong>欄位:</strong> Extended=${extended}，NDO=${ndo}，MessageID=${messageId}，Bit8=${bit8}，Spec=${specText[spec]}，Bit5=${bit5}。</div>
+        <div><strong>第二行判斷:</strong> ${needsSecondLine ? "需要填" : "不需要填"}。${objectHint}</div>
+        <div class="bits">${renderBits({ extended, ndo, messageId, bit8, spec, bit5, messageType })}</div>
+      `;
+    };
+
+    document.querySelector("#expandAll").addEventListener("click", () => {
+      details().forEach((item) => {
+        item.open = true;
+      });
+      treeBranches().forEach((branch) => {
+        setBranchExpanded(branch, true);
+      });
+    });
+
+    document.querySelector("#collapseAll").addEventListener("click", () => {
+      details().forEach((item) => {
+        item.open = false;
+      });
+      treeBranches().forEach((branch) => {
+        setBranchExpanded(branch, false);
+      });
+    });
+
+    renderMessageTypeMatrices();
+    renderDataObjectTrees();
+    initializeTreeToggles();
+    headerInput.addEventListener("input", decodePacket);
+    objectInput.addEventListener("input", decodePacket);
+  </script>
+</body>
+</html>
